@@ -1,22 +1,63 @@
 #!/bin/bash
-# This script downloads gridded data from Smartmet Server (test) for nowcasting purposes
+# This script downloads gridded data from Smartmet Server (test) for nowcasting purposes. Current state is coming from $USED_OBS (LAPS) and forecasts are from $USED_MODEL (
 # The script needs a trigger so that it is run whenever the latest LAPS analysis is ready. Currently it is possible that rounded to previous even hour there's no LAPS analysis available. LAPS analysis gets ready around 20 past?
 
-# Input parameters (remember to call shell scripts with named arguments like DATAPATH="/fmi/somepath/" ./run.sh
-DATAPATH=${DATAPATH:-"/fmi/data/nowcasting/"}
-echo $DATAPATH
-DOMAIN=${DOMAIN:-"TULISET2"} # this specifies the extent of the domain which is used
+# Known issues:
+# predictability (the max time length over which persistence is applied to) as an input parameter is not applied at the moment
+# no error checking or triggering for LAPS analysis whether it is coming from Smartmet Server or not
+# not known whether 
+# The bbox of DOMAIN TULISET2 is burned to wget retrievals atm
+#
+####### Input parameters ########
+# (remember to call shell scripts with named arguments like DATAPATH="/fmi/somepath/" ./run.sh though it is not necessary as there are always default values specified!) 
+DOMAIN=${DOMAIN:-"SCAND2"} # this specifies the extent of the domain which is used
 USED_OBS=${USED_OBS:-"laps_skandinavia"}
 USED_MODEL=${USED_MODEL:-"pal_skandinavia"}
-PREDICTABILITY=${PREDICTABILITY:-"3"} # This must be an even number as model data is not available on a more frequent temporal resolution
+PREDICTABILITY=${PREDICTABILITY:-"3"} # This must be an even number, as model data or production system operates on max one hour temporal resolution.
+SECONDS_BETWEEN_STEPS=${SECONDS_BETWEEN_STEPS:-3600} # One hour resolution is required for production. For illustrative purposes of the algorithm, even higher resolution can be used
 
-# Generate current timestamps for the Smartmet Server retrievals. Here, 3hours can be taken in as an argument (defined maybe by the radar nowcasting predictability parameter?). The retrieval time stamps are rounded to previous hour.
+####### Time stamps. These are rounded to previous hour.
 timestamp_now=`eval date -u -d "now" +"%Y%m%d%H"`00
 timestamp_fcst=$(eval 'date -u -d "now + $PREDICTABILITY hour" +"%Y%m%d%H"')00
 timestamp_m4hours=$(eval 'date -u -d "now - 4 hour" +"%Y%m%d%H"'00)
 echo $timestamp_now
 echo $timestamp_fcst
 echo $timestamp_m4hours
+YEAR=${timestamp_now:0:4}
+MONTH=${timestamp_now:4:2}
+DAY=${timestamp_now:6:2}
+
+####### Data paths
+PYTHON=${PYTHON:-'/fmi/dev/python_virtualenvs/venv/bin/python'} # This defines virtual environment in Elmo so that HDF5 files can be well opened
+CONFPATH=${CONFPATH:-"/fmi/$FMI_RUN_ENV/run/radar/conf/conf/"} # Area configurations are defined in the files located in this directory
+DATAPATH=${DATAPATH:-"/fmi/data/nowcasting/"} # Fields from Smartmet server are retrieved to this directory
+PRODUCTPATH=${PRODUCTPATH:-"/fmi/$FMI_RUN_ENV/products/cache/nowcasting/"} # Nowcasting fields are output to this directory
+echo $DATAPATH
+echo $PRODUCTPATH
+if [ ! -d $DATAPATH ]; then
+    mkdir --parents $PRODUCTPATH --mode g+rwx
+    chgrp fmiprod $DATAPATH
+fi
+
+if [ ! -d $PRODUCTPATH ]; then 
+    mkdir --parents $PRODUCTPATH --mode g+rwx
+    chgrp fmiprod $PRODUCTPATH
+fi
+
+####### Radar data location (composite data used for precipitation nowcasting purposes, here no Tuliset2 model is applied but only the radar composite)
+COMPOSITE_DIR="/fmi/$FMI_RUN_ENV/products/cache/radar/rack/comp"
+COMPOSITE_BASENAME=`readlink $COMPOSITE_DIR/LATEST_radar.rack.comp_CONF=${DOMAIN}.h5`
+COMPOSITE=$COMPOSITE_DIR/$COMPOSITE_BASENAME
+# COMPOSITE=`ls /radar/storage/HDF5/$YEAR/$MONTH/$DAY/radar/cart/comp/rack/*CONF=${DOMAIN}*.h5 | sort | tail -1`
+# TIMESTAMP=`basename $COMPOSITE | awk -F_ '{print $1}'`
+TIMESTAMP=`echo $COMPOSITE_BASENAME | awk -F_ '{print $1}'`
+HOUR=${TIMESTAMP:8:2}
+MIN=${TIMESTAMP:10:2}
+DATE=$YEAR$MONTH$DAY' '$HOUR:$MIN
+
+
+
+
 
 
 #MINS_BETWEEN_STEPS=${MINS_BETWEEN_STEPS:-15}
@@ -51,7 +92,7 @@ query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?p
 echo $query
 eval $query
 
-# IF NO LAPS AVAILABLE THEN WHAT?!
+# IF NO LAPS AVAILABLE THEN WHAT?! ADD ERROR CHECKING HERE!
 
  
 
@@ -66,6 +107,18 @@ eval $query
 
 # this is not working really
 # gdalwarp -t_srs epsg:3067 -of netCDF 201805311000_fcst201805311300_pal_skandinavia_DOMAIN\=TULISET2_Pressure.nc output.nc
+# This only changes the data type from .nc to HDF5
+# see webpage https://stackoverflow.com/questions/17332353/what-is-the-easiest-way-to-convert-netcdf-to-hdf5-on-windows
+# see also https://www.unidata.ucar.edu/software/netcdf/docs/interoperability_hdf5.html
+# probably it is sufficient to only make projection changes and not turn Netcdf file into HDF5. nc4 files can be read with HDF5 programs and vice versa.
+query="nccopy -k 4 "$DATAPATH$OBSDATA" "$DATAPATH"obsdata.nc"
+echo $query
+eval $query
+query="nccopy -k 4 "$DATAPATH$MODELDATA" "$DATAPATH"modeldata.nc"
+echo $query
+eval $query
+
+
 
 
 # While retrieving data from Smartmet Server, projection 3067 does not work at the moment. Also, datas are coming with full resolution which might not be the most appropriate thing to do. If there's an option to use a common resolution for all data sources that could be used. Otherwise, interpolation will need to be done after the retrieval.
@@ -81,6 +134,14 @@ eval $query
 query="rm "$DATAPATH$MODELDATA
 echo $query
 eval $query
+#query="rm "$DATAPATH"obsdata.nc"
+#echo $query
+#eval $query
+#query="rm "$DATAPATH"modeldata.nc"
+#echo $query
+#eval $query
+
+
  
 done
 
