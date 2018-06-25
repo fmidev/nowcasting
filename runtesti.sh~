@@ -1,0 +1,13 @@
+import interpolation
+    import h5py
+    import hiisi
+    import numpy as np
+    import argparse
+    import datetime
+    import ConfigParser
+
+    # FIRST LEARN HOW TO READ NETCDF OBS AND MODEL FIELDS IN
+    comp = hiisi.OdimCOMP("/fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613120000.hdf", 'r')
+    comp.datasets() # shows all the datasets the file has
+    test=comp.select_dataset('RATE')
+    

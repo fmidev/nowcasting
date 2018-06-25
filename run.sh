@@ -3,18 +3,39 @@
 # The script needs a trigger so that it is run whenever the latest LAPS analysis is ready. Currently it is possible that rounded to previous even hour there's no LAPS analysis available. LAPS analysis gets ready around 20 past?
 
 # Known issues:
-# predictability (the max time length over which persistence is applied to) as an input parameter is not applied at the moment
-# no error checking or triggering for LAPS analysis whether it is coming from Smartmet Server or not
-# not known whether 
-# The bbox of DOMAIN TULISET2 is burned to wget retrievals atm
+# SOLVED predictability (the max time length over which persistence is applied to) as an input parameter is not applied at the moment
+# is there need to have predictability defined in time-span where model data is not available? If this was done, model data would also need to be interpolated from 0 and 3 hour forecasts...
+# no error checking or triggering for the LAPS analysis of current hour whether it is available from Smartmet Server or not
+# Data coming from Smartmet Server is not yet reprojected to EPSG 3067 (or whatever projection is defined in $CONFPATH$CONFFILE$PROJ)
+# SOLVED The bbox of DOMAIN SCAND2 is burned to wget retrievals atm. These bbox boundaries would need to be actually loaded in from conf files, which are specified in directory /fmi/dev/run/radar/conf/conf/
+# For precipitation, radar data RATE composites and model data instantaneous RATES would be needed. These would need to have a somewhat comparable temporal resolution.
 #
 ####### Input parameters ########
 # (remember to call shell scripts with named arguments like DATAPATH="/fmi/somepath/" ./run.sh though it is not necessary as there are always default values specified!) 
-DOMAIN=${DOMAIN:-"SCAND2"} # this specifies the extent of the domain which is used
+
+####### General parameters
 USED_OBS=${USED_OBS:-"laps_skandinavia"}
 USED_MODEL=${USED_MODEL:-"pal_skandinavia"}
 PREDICTABILITY=${PREDICTABILITY:-"3"} # This must be an even number, as model data or production system operates on max one hour temporal resolution.
 SECONDS_BETWEEN_STEPS=${SECONDS_BETWEEN_STEPS:-3600} # One hour resolution is required for production. For illustrative purposes of the algorithm, even higher resolution can be used
+PYTHON=${PYTHON:-'/fmi/dev/python_virtualenvs/venv/bin/python'}
+DOMAIN=${DOMAIN:-"SCAND2"} # this specifies the extent of the domain which is used (the name of the conf file)
+CONFDIR=${CONFDIR:-"/fmi/dev/run/radar/conf/conf/"} # All the domain configurations are located here
+DATAPATH=${DATAPATH:-"/fmi/data/nowcasting/"}
+OUTPATH=${OUTPATH:-"/fmi/$FMI_RUN_ENV/products/cache/nowcasting/"} # Nowcasting fields are output to this directory
+OUTFILE_INTERP=${OUTFILE_INTERP:-'{}_${DOMAIN}.h5'}
+OUTFILE_SUM=${OUTFILE_SUM:-'{}_5minsum_${DOMAIN}.h5'}
+echo $DATAPATH
+echo $OUTPATH
+if [ ! -d $DATAPATH ]; then
+    mkdir --parents $OUTPATH --mode g+rwx
+    chgrp fmiprod $DATAPATH
+fi
+
+if [ ! -d $OUTPATH ]; then 
+    mkdir --parents $OUTPATH --mode g+rwx
+    chgrp fmiprod $OUTPATH
+fi
 
 ####### Time stamps. These are rounded to previous hour.
 timestamp_now=`eval date -u -d "now" +"%Y%m%d%H"`00
@@ -27,34 +48,26 @@ YEAR=${timestamp_now:0:4}
 MONTH=${timestamp_now:4:2}
 DAY=${timestamp_now:6:2}
 
-####### Data paths
-PYTHON=${PYTHON:-'/fmi/dev/python_virtualenvs/venv/bin/python'} # This defines virtual environment in Elmo so that HDF5 files can be well opened
-CONFPATH=${CONFPATH:-"/fmi/$FMI_RUN_ENV/run/radar/conf/conf/"} # Area configurations are defined in the files located in this directory
-DATAPATH=${DATAPATH:-"/fmi/data/nowcasting/"} # Fields from Smartmet server are retrieved to this directory
-PRODUCTPATH=${PRODUCTPATH:-"/fmi/$FMI_RUN_ENV/products/cache/nowcasting/"} # Nowcasting fields are output to this directory
-echo $DATAPATH
-echo $PRODUCTPATH
-if [ ! -d $DATAPATH ]; then
-    mkdir --parents $PRODUCTPATH --mode g+rwx
-    chgrp fmiprod $DATAPATH
-fi
 
-if [ ! -d $PRODUCTPATH ]; then 
-    mkdir --parents $PRODUCTPATH --mode g+rwx
-    chgrp fmiprod $PRODUCTPATH
-fi
-
-####### Radar data location (composite data used for precipitation nowcasting purposes, here no Tuliset2 model is applied but only the radar composite)
+####### Radar data location (composite data used for precipitation nowcasting purposes (dbzH values), here no Tuliset2 nowcast is applied but only the radar composite)
 COMPOSITE_DIR="/fmi/$FMI_RUN_ENV/products/cache/radar/rack/comp"
-COMPOSITE_BASENAME=`readlink $COMPOSITE_DIR/LATEST_radar.rack.comp_CONF=${DOMAIN}.h5`
+COMPOSITE_BASENAME=`readlink $COMPOSITE_DIR/LATEST_radar.rack.comp_CONF=${DOMAIN}_CAPPI600.h5`
 COMPOSITE=$COMPOSITE_DIR/$COMPOSITE_BASENAME
 # COMPOSITE=`ls /radar/storage/HDF5/$YEAR/$MONTH/$DAY/radar/cart/comp/rack/*CONF=${DOMAIN}*.h5 | sort | tail -1`
 # TIMESTAMP=`basename $COMPOSITE | awk -F_ '{print $1}'`
-TIMESTAMP=`echo $COMPOSITE_BASENAME | awk -F_ '{print $1}'`
-HOUR=${TIMESTAMP:8:2}
-MIN=${TIMESTAMP:10:2}
-DATE=$YEAR$MONTH$DAY' '$HOUR:$MIN
+# TIMESTAMP=`echo $COMPOSITE_BASENAME | awk -F_ '{print $1}'`
+# HOUR=${TIMESTAMP:8:2}
+# MIN=${TIMESTAMP:10:2}
+# DATE=$YEAR$MONTH$DAY' '$HOUR:$MIN
 
+####### Defining actual boundary area
+# Read in conf file
+query="source "$CONFDIR$DOMAIN".cnf"
+echo $query
+eval $query
+echo $BBOX
+echo $PROJ
+echo $SIZE
 
 
 
@@ -88,7 +101,7 @@ echo $MODELDATA
 
 
 # Retrieving LAPS data over Scandinavian domain
-query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$parameter"&producer=laps_skandinavia&format=netcdf&origintime="$timestamp_now"&bbox=4.00118791,50.00007491,42.99146951,72.99231333&projection=epsg:4326'"
+query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$parameter"&producer="$USED_OBS"&format=netcdf&origintime="$timestamp_now"&bbox="$BBOX"&projection=epsg:4326'"
 echo $query
 eval $query
 
@@ -97,7 +110,7 @@ eval $query
  
 
 # Retrieving pal forecast over Scandinavian domain
-query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$parameter"&producer=pal_skandinavia&format=netcdf&starttime="$timestamp_fcst"&bbox=4.00118791,50.00007491,42.99146951,72.99231333&projection=epsg:4326'"
+query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$parameter"&producer="$USED_MODEL"&format=netcdf&starttime="$timestamp_fcst"&bbox="$BBOX"&projection=epsg:4326'"
 echo $query
 eval $query
 
@@ -111,6 +124,8 @@ eval $query
 # see webpage https://stackoverflow.com/questions/17332353/what-is-the-easiest-way-to-convert-netcdf-to-hdf5-on-windows
 # see also https://www.unidata.ucar.edu/software/netcdf/docs/interoperability_hdf5.html
 # probably it is sufficient to only make projection changes and not turn Netcdf file into HDF5. nc4 files can be read with HDF5 programs and vice versa.
+
+# Change to netcdf4 type file OR DO THE REPROJECTION HERE AND READ IN NETCDF3 FILES IN PYTHON SCRIPT
 query="nccopy -k 4 "$DATAPATH$OBSDATA" "$DATAPATH"obsdata.nc"
 echo $query
 eval $query
@@ -125,7 +140,19 @@ eval $query
 
 # END
 
-# produce optical flow based interpolation...
+# Similar call as for generate.sh USE THIS
+#cmd="$PYTHON call_interpolation.py --first_precip_field $DATAPATH/$OBSDATA_reprojected.nc --second_precip_field $DATAPATH/$MODELDATA_reprojected.nc --seconds_between_steps $SECONDS_BETWEEN_STEPS --output_interpolate $OUTPATH/$OUTFILE_INTERP --output_sum $OUTPATH/$OUTFILE_SUM"
+#echo $cmd
+#eval $cmd
+
+##  Convert output to png?
+# OUTFILES=`echo $OUTFILE | awk -F{} '{print $2}'`
+
+##for f in $OUTPATH/*$OUTFILES;do
+##    PNGFILE=`basename $f .h5`.png
+##    rack $f --encoding C --convert --iResize 496,731 -o $OUTPATH/$PNGFILE
+##done
+
 
 # remove original input files
 query="rm "$DATAPATH$OBSDATA
