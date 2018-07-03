@@ -9,14 +9,26 @@
 # SOLVED The bbox of DOMAIN SCAND2 is burned to wget retrievals atm. These bbox boundaries would need to be actually loaded in from conf files, which are specified in directory /fmi/dev/run/radar/conf/conf/
 # SOLVED laps_skandinavia -grid needs to have similar resolution than edited data (pal_skandinavia). The grid definition needs to be retrieved from the modeldata.nc file
 # SOLVED Smartmet server -retrievals currently contain several timesteps...restrict to one analysis and forecast length (defined by predictability). This is fixed just by including timesteps=$PREDICTABILITY to the retrievals.
-# NECESSARYNo instantaneous precipitation in pal_skandinavia?
-# NECESSARY learn how to read in netcdf files to Python
-# NECESSARY for the function interpolation.advection, variables quantity_min/quantity_max need to be defined specificly for each variable.
+# SOLVED LAPS_skandinavia -fields are a bit smaller compared to pal_skandinavia -fields because of boundary handling. Probably pal-data needs to be made a bit smaller according to LAPS-boundaries so that the boundaries are not causing any problems in the AMV calculation or the interpolation itself
+# SOLVED learn how to read in netcdf files to Pytho
+# SOLVED for the function interpolation.advection, variables quantity_min/quantity_max need to be defined specificly for each variable. Simply take these from the fields (omitting the nodata value of course)
+
+# NECESSARY in function read_nc no kind of error checking of the data is being done atm. The min/max values are taken from the raw data as provided.
+# NECESSARY nodata fields can (in principle) be different between the timesteps. This causes problems in the beginning of interpolate_and_verify.py
+# NECESSARY No instantaneous precipitation in pal_skandinavia dataset? So just take the radar dBz images and scale them according to the 1hour accumulations in pal_skandinavia?
 # NECESSARY Farneback parameters: For what are these used? If for optical flow algorithm, what is the sensitivity of the forecasts to them (winsize in particular)?
 ## What verification metrics would need to be calculated from the sensitivity experiments?
 ## For practically any verif metrics (like field deformation or similar), previous merged forecasts need to be compared against current analysis. For development this is much much easier if analysis+forecasts are selected to be in the past so that verifying analyses are always available. Verification metrics can be calculated for both motion vectors calculated either forward and backward in time.
+### Model forecasts and persistence (skill scores compared to DMO). For temperature also linear cross-dissolve type of approach is needed
+### Through using several Farneback parameters (winsize etc)
+### As a function of forecast length
+## Verification of blended forecasts against PRODUCE THE CLASSIC RMSE-PLOT WHERE THREE (FOUR) CURVES ARE BEING PRODUCED AS A FUNCTION OF TIME (PERSISTENCE, MODEL FCST AND BLENDED FCST. For temperature, also linear cross-dissolve!). Here, blended forecast curves should be produced with several winsizes.
+
+
 # NECESSARY Visualization of the results? Through Turso-page and R scripts?
 # NECESSARY FOR OPERATIVE VERSION No error checking or triggering for the LAPS analysis of current hour whether it is available from Smartmet Server or not
+# NECESSARY SHOULD TULISET2 OR LAPS BE USED FOR PRECIPITATION? IF TULISET2, WHAT ABOUT INTERAPPLICABILITY OR SCALING OF THE RR UNITS?
+# NECESSARY You need to come up with reasonable R_min / R_max values for also other variables to precipitation. A named list for each parameter?
 
 # RADAR DATA CONVERSION TO EPSG 4326 IS MAYBE MORE PREFERABLE? Data coming from Smartmet Server is not yet reprojected to EPSG 3067 (or whatever projection is defined in $CONFPATH$CONFFILE$PROJ)
 # NOT ATM is there any need to have predictability defined in time-span where model data is not available? If this was done, model data would also need to be interpolated from 0 and 3 hour forecasts...Also, in the script call_interpolation.py the variable "n_interp_frames" would need to be accordingly defined as an even number.
@@ -30,7 +42,7 @@
 PYTHON=${PYTHON:-'/fmi/dev/python_virtualenvs/venv/bin/python'}
 USED_OBS=${USED_OBS:-"laps_skandinavia"}
 USED_MODEL=${USED_MODEL:-"pal_skandinavia"}
-PREDICTABILITY=${PREDICTABILITY:-"3"} # This must be an even number, as model data or production system operates on max one hour temporal resolution.
+PREDICTABILITY=${PREDICTABILITY:-"6"} # This must be an even number, as model data or production system operates on max one hour temporal resolution.
 SECONDS_BETWEEN_STEPS=${SECONDS_BETWEEN_STEPS:-3600} # One hour resolution is required for production. For illustrative purposes of the algorithm, even higher resolution can be used
 DOMAIN=${DOMAIN:-"SCAND2"} # this specifies the extent of the domain which is used (the name of the conf file)
 CONFDIR=${CONFDIR:-"/fmi/dev/run/radar/conf/conf/"} # All the domain configurations are located here
@@ -53,10 +65,10 @@ fi
 ####### Time stamps. These are rounded to previous hour.
 timestamp_now=`eval date -u -d "now" +"%Y%m%d%H"`00
 timestamp_fcst=$(eval 'date -u -d "now + $PREDICTABILITY hour" +"%Y%m%d%H"')00
-timestamp_m6hours=$(eval 'date -u -d "now - 6 hour" +"%Y%m%d%H"'00)
+timestamp_mpredhours=$(eval 'date -u -d "now - $PREDICTABILITY hour" +"%Y%m%d%H"'00)
 echo $timestamp_now
 echo $timestamp_fcst
-echo $timestamp_m6hours
+echo $timestamp_mpredhours
 YEAR=${timestamp_now:0:4}
 MONTH=${timestamp_now:4:2}
 DAY=${timestamp_now:6:2}
@@ -113,7 +125,7 @@ echo $MODELDATA
 #wget -O out2.nc --no-proxy 'smartmet.fmi.fi/download?param=Temperature&producer=ecmwf_eurooppa_pinta&format=netcdf&bbox=19.1,59.7,31.7,70.1&timesteps=24&projection=epsg:4326'
 
 # Retrieving pal forecast over Scandinavian domain
-query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$timestamp_m6hours"&endtime="$timestamp_now"&bbox="$BBOX"&projection=epsg:4326'"
+query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$timestamp_mpredhours"&endtime="$timestamp_now"&bbox="$BBOX"&projection=epsg:4326'"
 echo $query
 eval $query
 # Change to netcdf4 type file OR DO THE REPROJECTION HERE AND READ IN NETCDF3 FILES IN PYTHON SCRIPT
@@ -135,7 +147,7 @@ echo $SIZE_LAT
 echo $SIZE_LON
 
 # Retrieving LAPS data over Scandinavian domain
-query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$timestamp_m6hours"&endtime="$timestamp_now"&bbox="$BBOX"&projection=epsg:4326'"
+query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$timestamp_mpredhours"&endtime="$timestamp_now"&bbox="$BBOX"&projection=epsg:4326'"
 echo $query
 eval $query
 # IF NO LAPS AVAILABLE IN OPERATIVE MODE THEN WHAT?! ADD ERROR CHECKING HERE!
@@ -162,7 +174,7 @@ eval $query
 # END
 
 # Updated call with additional parameters
-#cmd=$PYTHON" call_interpolation_testi.py --first_field "$DATAPATH"obsdata.nc --second_precip_field "$DATAPATH"obsdata.nc --seconds_between_steps "$SECONDS_BETWEEN_STEPS" --output_interpolate "$OUTPATH$OUTFILE_INTERP" --predictability "$PREDICTABILITY" --parameter "$PARAMETER
+#cmd=$PYTHON" call_interpolation_testi.py --obsdata "$DATAPATH"obsdata.nc --modeldata "$DATAPATH"modeldata.nc --seconds_between_steps "$SECONDS_BETWEEN_STEPS" --output_interpolate "$OUTPATH$OUTFILE_INTERP" --predictability "$PREDICTABILITY" --parameter "$PARAMETER
 
 # Similar call and parameters as for generate.sh in /fmi/dev/run/radar/amv/spoflow/interpolate/precipfields USE THIS!!
 #cmd="$PYTHON call_interpolation.py --first_precip_field $DATAPATH/$OBSDATA_reprojected.nc --second_precip_field $DATAPATH/$MODELDATA_reprojected.nc --seconds_between_steps $SECONDS_BETWEEN_STEPS --output_interpolate $OUTPATH/$OUTFILE_INTERP --output_sum $OUTPATH/$OUTFILE_SUM"
