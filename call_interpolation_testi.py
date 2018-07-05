@@ -1,4 +1,4 @@
-import interpolate_and_verify
+import interpolate
 import h5py
 import hiisi
 import numpy as np
@@ -7,6 +7,8 @@ import datetime
 import ConfigParser
 import matplotlib.pyplot as plt
 import netCDF4
+import sys
+import verif_calculation
 
 def read_nc(image_nc_file):
     tempds = netCDF4.Dataset(image_nc_file)
@@ -200,20 +202,22 @@ def write_accumulated_h5(output_h5,accumulated_image,file_dict_accum,date,time,s
 
 def main():
     
+    # #Read parameters from config file for interpolation (or optical flow algorithm, find out this later!). The function for reading the parameters is defined above.
+    farneback_params=farneback_params_config()
+
     # FIRST LEARN HOW TO READ NETCDF OBS AND MODEL FIELDS IN. The function below is written only for reading HDF5 radar data. Also radar observations need to be in some kind of accumulation form as pal_skandinavia data are always 1h accumulations.
 
     # In the "verification mode", the idea is to load in the "observational" and "forecast" datasets as numpy arrays. Both of these numpy arrays ("image_array") contain ALL the timesteps contained also in the files themselves. In addition, the returned variables "timestamp" and "mask_nodata" contain the values for all the timesteps.
-    # Variables ("quantity", "quantity_min", "quantity_max") are defined outside the data retrievals
 
     # First precipitation field is from Tuliset2/analysis. What about possible scaling???
     if options.parameter == 'Precipitation1h_TULISET': # This needs to be done better
         image_array1, quantity1_min, quantity1_max, timestamp1, mask_nodata1 = read_HDF5("/fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613120000.hdf")
         # image_array2, quantity2_min, quantity2_max, timestamp2, mask_nodata2 = read_HDF5("/fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613121500.hdf")
     else:
-        image_array1, quantity1_min, quantity1_max, timestamp1, mask_nodata1, nodata1 = read_nc("/fmi/data/nowcasting/testdata/obsdata.nc")
+        image_array1, quantity1_min, quantity1_max, timestamp1, mask_nodata1, nodata1 = read_nc("/fmi/data/nowcasting/testdata/obsdata_pressure.nc")
         quantity1 = "options.parameter"
     # The second field is always a model forecast field
-    image_array2, quantity2_min, quantity2_max, timestamp2, mask_nodata2, nodata2 = read_nc("/fmi/data/nowcasting/testdata/modeldata.nc")
+    image_array2, quantity2_min, quantity2_max, timestamp2, mask_nodata2, nodata2 = read_nc("/fmi/data/nowcasting/testdata/modeldata_pressure.nc")
     quantity2 = "options.parameter"
 
     # Missing_values of image_array2 ("nodata2") are changed to "nodata1". The larger data is made smaller so that the actual data points in the two data sets have the same geographical domain (LAPS data covers a slighlty larger domain than pal).
@@ -225,33 +229,126 @@ def main():
         image_array1[np.where( np.ma.getmask(mask_nodata1) )] = nodata1
         image_array2[np.where( np.ma.getmask(mask_nodata1) )] = nodata1
         mask_nodata2 = mask_nodata1
+    nodata = nodata1 = nodata2
     
     # Defining definite min/max values from the two fields
     R_min=min(quantity1_min,quantity2_min)
     R_max=max(quantity1_max,quantity2_max)
+    # Defining a masked array that is the same for all the forecast fields and both producers (if even one forecast length is missing for a specific grid point, that grid point is masked out).
+    mask_nodata = np.sum(np.ma.getmask(mask_nodata1),axis=0)>0
+    mask_nodata = np.ma.masked_where(mask_nodata == True,mask_nodata)
 
     # # Mask nodata values to be just slightly less than the lowest field value
     # image_array1[np.where(np.ma.getmask(mask_nodata1))] = R_min
     # nodata = -nodata
 
+    # DATA IS NOW LOADED AS NORMAL NUMPY NDARRAYS
 
-    # DATA IS NOW LOADED AS A NORMAL NUMPY NDARRAY
-    
-    # #Calculate interpolated images
-    # interpolated_images=interpolation.advection(obsfields=image_array1, modelfields=image_array2, mask_nodata=mask_nodata1, farneback_params=farneback_params, R_min=R_min, R_max=R_max, missingval=nodata1, logtrans=False, predictability=options.predictability, seconds_between_steps=options.seconds_between_steps)
 
+
+
+
+
+
+    # RANGE OF POSSIBLE VALUES FOR SENSITIVITY TESTS
+    # With this setup the sensitivity analysis is done by running AMV calculation with 200 different set-ups. The result array of ones is about 2218 MBs, so it still should be easily manageable.
+    predictabilitys = np.arange(2,options.predictability+1) # # There's no point in doing calculations for less than 2 hours: One hour predictability on a one hour time resolution would just mean that the first timestep is the analysis and the second one the model forecast.
+    fb_winsizes = np.array([10,30,50,70,100]) # Averaging window size
+    fb_levelss = np.array([1,6]) # Number of pyramid layers including the initial image
+    fb_poly_ns = np.array([3,5,7,20]) # Size of the pixel neighborhood used to find polynomial expansion in each pixel. CAUTIONARY AT FIRST! np.array([3,5,7,20]) # np.array([7])
+
+    # USED VERIFICATION METRICS
+    verif_metrics_used = np.array(["ME","RMSE"])
+
+    # RESULT ARRAYS
+    # Interpolated fields and verification arrays for the AMV method, including sensitivity analysis
+    fields_interpolated_advection = (np.ones(tuple([len(predictabilitys),len(fb_winsizes),len(fb_levelss),len(fb_poly_ns)])+image_array1.shape))
+    verif_interpolated_advection = (np.ones(tuple([len(predictabilitys),len(fb_winsizes),len(fb_levelss),len(fb_poly_ns),image_array1.shape[0],verif_metrics_used.shape[0]])))
+
+    # Interpolated fields and verification arrays for the linear cross-dissolve method
+    fields_interpolated_linear = (np.ones(tuple([len(predictabilitys)])+image_array1.shape))
+    verif_interpolated_linear = (np.ones(tuple([len(predictabilitys),image_array1.shape[0],verif_metrics_used.shape[0]]))) 
+    # Verification array for the DMO forecast
+    verif_interpolated_DMO = (np.ones(tuple([image_array1.shape[0],verif_metrics_used.shape[0]]))) 
+    # Verification array for the persistence forecast
+    verif_interpolated_persistence = (np.ones(tuple([image_array1.shape[0],verif_metrics_used.shape[0]]))) 
     
+
+    sys.exit( "A Good Reason" )
+
+    # CALCULATING INTERPOLATED IMAGES FOR DIFFERENT PRODUCERS AND CALCULATING VERIF METRICS
+    for predictability in predictabilitys:
+       for fb_winsize in fb_winsizes:
+          for fb_levels in fb_levelss:
+             for fb_poly_n in fb_poly_ns:
+                # Like mentioned at https://docs.opencv.org/2.4/modules/video/doc/motion_analysis_and_object_tracking.html, a reasonable value for poly_sigma depends on poly_n. Here we use a fraction 4.6 for these values.
+                fb_poly_sigma = fb_poly_n / 4.6
+                fb_params = (farneback_params[0],fb_levels,fb_winsize,farneback_params[3],fb_poly_n,fb_poly_sigma,farneback_params[6])
+                # Interpolated data
+                interpolated_advection=interpolate.advection(obsfields=image_array1, modelfields=image_array2, mask_nodata=mask_nodata, farneback_params=fb_params, predictability=predictability, seconds_between_steps=options.seconds_between_steps, R_min=R_min, R_max=R_max, missingval=nodata, logtrans=False)
+                fields_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,:,:] = interpolated_advection
+                # verif metrics calculated from interpolated data DONE BY HAND HERE!!!!
+                verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,0] = verif_calculation.ME(image_array1,interpolated_advection,mask_nodata)
+                verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,1] = verif_calculation.RMSE(image_array1,interpolated_advection,mask_nodata)
+                print(predictability,fb_winsize,fb_levels,fb_poly_n)
+       # Calculating blend through simple linear cross-dissolve
+       # Interpolated data
+       interpolated_linear=interpolate.linear(obsfields=image_array1, modelfields=image_array2, mask_nodata=mask_nodata, predictability=predictability, seconds_between_steps=options.seconds_between_steps, missingval=nodata)
+       fields_interpolated_linear[((predictabilitys==predictability).nonzero()),:,:,:] = interpolated_linear
+       # verif metrics calculated from interpolated data DONE BY HAND HERE!!!!
+       verif_interpolated_linear[((predictabilitys==predictability).nonzero()),:,0] = verif_calculation.ME(image_array1,interpolated_linear,mask_nodata)
+       verif_interpolated_linear[((predictabilitys==predictability).nonzero()),:,1] = verif_calculation.RMSE(image_array1,interpolated_linear,mask_nodata)
+    # Calculate verification metrics for DMO forecasts
+    verif_interpolated_DMO[:,0] = verif_calculation.ME(image_array1,image_array2,mask_nodata)
+    verif_interpolated_DMO[:,1] = verif_calculation.RMSE(image_array1,image_array2,mask_nodata)
+    # Calculate verification metrics for persistence forecast
+    verif_interpolated_persistence[:,0] = verif_calculation.ME(np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),image_array2,mask_nodata)
+    verif_interpolated_persistence[:,1] = verif_calculation.RMSE(np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),image_array2,mask_nodata)
+    
+
+    # laske_eri_verif_metriikat voisi laskea metriikan myos liikevektorikenttien perusteella? Ensin kuitenkin perus-RMSE:n kaltaiset laskentaan...taman jalkeen muuta. Jos tekee, pitaa muokata interpolate.py -skriptia palauttamaan liikevektorikentat, jotta voi laskea myos analyysikenttien ja blendikenttien valille liikevektorit.
+    
+
+    # This is only for a quick visual inspection of the plots
+    # TEMPERATURE
+    plt.subplot(2,2,1)
+    plt.imshow(fields_interpolated[0,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
+    plt.subplot(2,2,2)
+    plt.imshow(fields_interpolated[1,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
+    plt.subplot(2,2,3)
+    plt.imshow(fields_interpolated[3,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
+    plt.subplot(2,2,4)
+    plt.imshow(fields_interpolated[4,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
+    plt.show()
+    # PRESSURE
+    plt.subplot(2,2,1)
+    plt.imshow(fields_interpolated[4,1,0,0,0,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.subplot(2,2,2)
+    plt.imshow(fields_interpolated[4,1,0,0,1,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.subplot(2,2,3)
+    plt.imshow(fields_interpolated[4,1,0,0,2,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.subplot(2,2,4)
+    plt.imshow(fields_interpolated[4,1,0,0,3,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.show()
+
+    plt.subplot(2,2,1)
+    plt.imshow(interpolated_linear[1,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.subplot(2,2,2)
+    plt.imshow(interpolated_linear[2,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.subplot(2,2,3)
+    plt.imshow(interpolated_linear[3,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.subplot(2,2,4)
+    plt.imshow(interpolated_linear[4,:,:],vmin=100500,vmax=101900,cmap='hot')
+    plt.show()
     # raise ScriptExit( "A Good Reason" )
     # return;
 
-    # #Read parameters from config file for interpolation (or optical flow algorithm, find out this later!). The function for reading the parameters is defined above.
-    farneback_params=farneback_params_config()
-    
-    #Calculate number of interpolated frames from timestamps and minutes between steps
-    formatted_time_first=datetime.datetime.strptime(timestamp1,'%Y%m%d%H%M%S')
-    formatted_time_second=datetime.datetime.strptime(timestamp2,'%Y%m%d%H%M%S')
-    timediff_seconds=(formatted_time_second-formatted_time_first).total_seconds()
-    n_interp_frames=int(timediff_seconds/options.seconds_between_steps-1) # Here, int type (timediff_seconds) is divided with another int type (seconds_between_steps) so the result is int as well
+    # #Calculate number of interpolated frames from timestamps and minutes between steps
+    # formatted_time_first=datetime.datetime.strptime(timestamp1,'%Y%m%d%H%M%S')
+    # formatted_time_second=datetime.datetime.strptime(timestamp2,'%Y%m%d%H%M%S')
+    # timediff_seconds=(formatted_time_second-formatted_time_first).total_seconds()
+    # n_interp_frames=int(timediff_seconds/options.seconds_between_steps-1) # Here, int type (timediff_seconds) is divided with another int 
+    # type (seconds_between_steps) so the result is int as well
 
     # R1 = image_array1
     # R2 = image_array2
@@ -328,8 +425,10 @@ if __name__ == '__main__':
     #Parse commandline arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--obsdata',
+                        default="/fmi/data/nowcasting/obsdata.nc",
                         help='Obs data, representing the first time step used in image morphing.')
     parser.add_argument('--modeldata',
+                        default="/fmi/data/nowcasting/modeldata.nc",
                         help='Model data, representing the last time step used in image morphing.')
     parser.add_argument('--seconds_between_steps',
                         type=int,
@@ -355,11 +454,15 @@ if __name__ == '__main__':
                         default='test_{}.nc',
                         help='Output hdf5 file name, leave brackets {} for timestamp.')
     parser.add_argument('--predictability',
-                        default='3',
+                        type=int,
+                        default='6',
                         help='Predictability in hours. Between the analysis and forecast of this length, forecasts need to be interpolated')
     parser.add_argument('--parameter',
                         default='Temperature',
                         help='Variable which is handled.')
+    parser.add_argument('--mode',
+                        default='verif',
+                        help='Either "verif" or "fcst" mode. In verification mode, verification statistics are calculated from the blended forecasts. In forecast mode no.')
 
 
     options = parser.parse_args()

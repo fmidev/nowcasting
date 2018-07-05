@@ -39,11 +39,14 @@
 # (remember to call shell scripts with named arguments like DATAPATH="/fmi/somepath/" ./run.sh though it is not necessary as there are always default values specified!) 
 
 ####### General parameters
+MODE=${MODE:-'verif'} # verif-mode
 PYTHON=${PYTHON:-'/fmi/dev/python_virtualenvs/venv/bin/python'}
 USED_OBS=${USED_OBS:-"laps_skandinavia"}
 USED_MODEL=${USED_MODEL:-"pal_skandinavia"}
 PREDICTABILITY=${PREDICTABILITY:-"6"} # This must be an even number, as model data or production system operates on max one hour temporal resolution.
 SECONDS_BETWEEN_STEPS=${SECONDS_BETWEEN_STEPS:-3600} # One hour resolution is required for production. For illustrative purposes of the algorithm, even higher resolution can be used
+MINUTES_BETWEEN_STEPS=$(expr $SECONDS_BETWEEN_STEPS / 60)
+# echo $MINUTES_BETWEEN_STEPS
 DOMAIN=${DOMAIN:-"SCAND2"} # this specifies the extent of the domain which is used (the name of the conf file)
 CONFDIR=${CONFDIR:-"/fmi/dev/run/radar/conf/conf/"} # All the domain configurations are located here
 DATAPATH=${DATAPATH:-"/fmi/data/nowcasting/"}
@@ -64,14 +67,24 @@ fi
 
 ####### Time stamps. These are rounded to previous hour.
 timestamp_now=`eval date -u -d "now" +"%Y%m%d%H"`00
-timestamp_fcst=$(eval 'date -u -d "now + $PREDICTABILITY hour" +"%Y%m%d%H"')00
+timestamp_predhours=$(eval 'date -u -d "now + $PREDICTABILITY hour" +"%Y%m%d%H"')00
 timestamp_mpredhours=$(eval 'date -u -d "now - $PREDICTABILITY hour" +"%Y%m%d%H"'00)
 echo $timestamp_now
-echo $timestamp_fcst
+echo $timestamp_predhours
 echo $timestamp_mpredhours
 YEAR=${timestamp_now:0:4}
 MONTH=${timestamp_now:4:2}
 DAY=${timestamp_now:6:2}
+# In verification mode, used data is from near-history and verif metrics are calculated. Otherwise, future forecasts are retrieved and obsdata automatically reduces to length of one time step.
+if [ "$MODE" = "verif" ]
+then
+    STARTTIME="$timestamp_mpredhours"
+    ENDTIME="$timestamp_now"
+else
+    STARTTIME="$timestamp_now"
+    ENDTIME="$timestamp_predhours"
+fi
+
 
 
 ####### Radar data location (composite data used for precipitation nowcasting purposes (dbzH values), here no Tuliset2 nowcast is applied but only the radar composite)
@@ -113,11 +126,10 @@ eval $query
 for PARAMETER in Pressure Temperature
 do
 
-
-OBSDATA="$timestamp_now"_"$USED_OBS"_DOMAIN="$DOMAIN"_"$PARAMETER".nc
-MODELDATA="$timestamp_now"_fcst"$timestamp_fcst"_"$USED_MODEL"_DOMAIN="$DOMAIN"_"$PARAMETER".nc
-echo $OBSDATA
-echo $MODELDATA
+OBSDATA="$STARTTIME"_endtime"$ENDTIME"_"$USED_OBS"_DOMAIN="$DOMAIN"_"$PARAMETER".nc
+MODELDATA="$STARTTIME"_fcst"$ENDTIME"_"$USED_MODEL"_DOMAIN="$DOMAIN"_"$PARAMETER".nc
+#echo $OBSDATA
+#echo $MODELDATA
 
 # : <<'END'
 
@@ -125,35 +137,35 @@ echo $MODELDATA
 #wget -O out2.nc --no-proxy 'smartmet.fmi.fi/download?param=Temperature&producer=ecmwf_eurooppa_pinta&format=netcdf&bbox=19.1,59.7,31.7,70.1&timesteps=24&projection=epsg:4326'
 
 # Retrieving pal forecast over Scandinavian domain
-query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$timestamp_mpredhours"&endtime="$timestamp_now"&bbox="$BBOX"&projection=epsg:4326'"
-echo $query
+query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:4326'"
+# echo $query
 eval $query
 # Change to netcdf4 type file OR DO THE REPROJECTION HERE AND READ IN NETCDF3 FILES IN PYTHON SCRIPT
 query="nccopy -k 4 "$DATAPATH$MODELDATA" "$DATAPATH"modeldata.nc"
-echo $query
+# echo $query
 eval $query
 # Retrieve grid information from edited data (modeldata.nc file) and use this to retrieve a grid of same size for laps_skandinavia
 query='ncdump -h '$DATAPATH'modeldata.nc | grep "lat ="'
-echo $query
+# echo $query
 SIZE_LAT=$(eval $query)
 SIZE_LAT=`echo ${SIZE_LAT:7} | rev`
 SIZE_LAT=`echo ${SIZE_LAT:2} | rev`
 query='ncdump -h '$DATAPATH'modeldata.nc | grep "lon ="'
-echo $query
+# echo $query
 SIZE_LON=$(eval $query)
 SIZE_LON=`echo ${SIZE_LON:7} | rev`
 SIZE_LON=`echo ${SIZE_LON:2} | rev`
-echo $SIZE_LAT
-echo $SIZE_LON
+#echo $SIZE_LAT
+#echo $SIZE_LON
 
 # Retrieving LAPS data over Scandinavian domain
-query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$timestamp_mpredhours"&endtime="$timestamp_now"&bbox="$BBOX"&projection=epsg:4326'"
-echo $query
+query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:4326'"
+#echo $query
 eval $query
 # IF NO LAPS AVAILABLE IN OPERATIVE MODE THEN WHAT?! ADD ERROR CHECKING HERE!
 # Change to netcdf4 type file OR DO THE REPROJECTION HERE AND READ IN NETCDF3 FILES IN PYTHON SCRIPT
 query="nccopy -k 4 "$DATAPATH$OBSDATA" "$DATAPATH"obsdata.nc"
-echo $query
+#echo $query
 eval $query
 
 
@@ -174,14 +186,14 @@ eval $query
 # END
 
 # Updated call with additional parameters
-#cmd=$PYTHON" call_interpolation_testi.py --obsdata "$DATAPATH"obsdata.nc --modeldata "$DATAPATH"modeldata.nc --seconds_between_steps "$SECONDS_BETWEEN_STEPS" --output_interpolate "$OUTPATH$OUTFILE_INTERP" --predictability "$PREDICTABILITY" --parameter "$PARAMETER
+cmd=$PYTHON" call_interpolation_testi.py --obsdata "$DATAPATH"obsdata.nc --modeldata "$DATAPATH"modeldata.nc --seconds_between_steps "$SECONDS_BETWEEN_STEPS" --output_interpolate "$OUTPATH$OUTFILE_INTERP" --predictability "$PREDICTABILITY" --parameter "$PARAMETER --mode $MODE
 
 # Similar call and parameters as for generate.sh in /fmi/dev/run/radar/amv/spoflow/interpolate/precipfields USE THIS!!
-#cmd="$PYTHON call_interpolation.py --first_precip_field $DATAPATH/$OBSDATA_reprojected.nc --second_precip_field $DATAPATH/$MODELDATA_reprojected.nc --seconds_between_steps $SECONDS_BETWEEN_STEPS --output_interpolate $OUTPATH/$OUTFILE_INTERP --output_sum $OUTPATH/$OUTFILE_SUM"
+#cmd="$PYTHON call_interpolation.py --first_precip_field $DATAPATH/$OBSDATA_reprojected.nc --second_precip_field $DATAPATH/$MODELDATA_reprojected.nc --seconds_between_steps $SECONDS_BETWEEN_STEPS --output_interpolate $OUTPATH/$OUTFILE_INTERP --output_sum $OUTPATH/$OUTFILE_SUM --mode $MODE"
 # THIS WORKS!
 # cmd="$PYTHON call_interpolation_testi.py --first_precip_field /fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613120000.hdf --second_precip_field /fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613121500.hdf --seconds_between_steps 30 --output_interpolate $OUTPATH/$OUTFILE_INTERP --output_sum $OUTPATH/$OUTFILE_SUM"
 echo $cmd
-eval $cmd
+#eval $cmd
 
 ##  Convert output to png?
 # OUTFILES=`echo $OUTFILE | awk -F{} '{print $2}'`
@@ -194,10 +206,10 @@ eval $cmd
 
 # remove original input files
 query="rm "$DATAPATH$OBSDATA
-echo $query
+#echo $query
 eval $query
 query="rm "$DATAPATH$MODELDATA
-echo $query
+#echo $query
 eval $query
 #query="rm "$DATAPATH"obsdata.nc"
 #echo $query
