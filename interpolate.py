@@ -68,16 +68,15 @@ def linear(obsfields, modelfields, mask_nodata, predictability, seconds_between_
   R_interp = ones(modelfields.shape)
   R_interp[0,:,:] = R1
   for tw in tws:
-    # Linear cross-dissolve is an extremely simple linear weighting of the datasets
-    linear_combination=tw*R1 + (1.0-tw)*R2
-
+    
     # MASK1  = logical_and(isfinite(R1), R1 != missingval)
     # MASK2  = logical_and(isfinite(R2), R2 != missingval)
     # MASK12 = logical_and(MASK1, MASK2)
     MASK12 = ~np.ma.getmask(mask_nodata)
 
     R_interp_cur = ones(R1.shape) * missingval
-    R_interp_cur[MASK12] = (tw)*R1[MASK12] + (1.0-tw)*R2[MASK12]
+    # Linear cross-dissolve is an extremely simple linear weighting of the datasets
+    R_interp_cur[MASK12] = (tw)*R2[MASK12] + (1.0-tw)*R1[MASK12]
     # MASK_ = logical_and(MASK1, ~MASK2)
     # R_interp_cur[MASK_] = R1[MASK_]
     # MASK_ = logical_and(MASK2, ~MASK1)

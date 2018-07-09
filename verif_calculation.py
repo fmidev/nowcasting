@@ -51,7 +51,7 @@ def RMSE(obsfields, modelfields, mask_nodata):
 
 
 def ME(obsfields, modelfields, mask_nodata):
-  """This function calculates simple RMSE verif metric for forecast fields. The incoming data is assumed to have a form [time, x, y]. In other words, several time steps are allowed in the data.
+  """This function calculates simple ME verif metric for forecast fields. The incoming data is assumed to have a form [time, x, y]. In other words, several time steps are allowed in the data.
   
   Parameters
   ----------

@@ -9,6 +9,8 @@ import matplotlib.pyplot as plt
 import netCDF4
 import sys
 import verif_calculation
+import pandas as pd
+import os
 
 def read_nc(image_nc_file):
     tempds = netCDF4.Dataset(image_nc_file)
@@ -28,7 +30,81 @@ def read_nc(image_nc_file):
     return temps, temps_min, temps_max, dtime, mask_nodata, nodata
  
 
+# def line_verif_plot(advdata,lindata,dmodata,perdata,parameter,verif_metrics_used):
+#      # This plots the classic line plot of verification metrics. The plotted producers are
+#      ## Interpolation done using AMV method (several sensitivity simulations are done)
+#      ## Interpolation done using simple linear cross-dissolve
+#      ## DMO
+#      ## Persistence
+#      # Plotting two plots:
+#      # 1) Main producers for all different forecast lengths
+#      # 2) Main producers and all sensitivity test values for a specific forecast length
 
+#      # For testing purposes:
+
+#      np.mean(fields_interpolated_advection[:,1,1,2,:,100:300,100:400],axis=(2,3))
+
+#      advdata = verif_interpolated_advection
+#      lindata = verif_interpolated_linear
+#      dmodata = verif_interpolated_DMO
+#      perdata = verif_interpolated_persistence
+
+#      advdata = np.load("/fmi/data/nowcasting/results/verif_stats/verif_interpolated_advection_20180628060000_20180628120000_Temperature.npy")
+#      lindata = np.load("/fmi/data/nowcasting/results/verif_stats/verif_interpolated_linear_20180628060000_20180628120000_Temperature.npy")
+#      perdata = np.load("/fmi/data/nowcasting/results/verif_stats/verif_interpolated_persistence_20180628060000_20180628120000_Temperature.npy")
+#      dmodata = np.load("/fmi/data/nowcasting/results/verif_stats/verif_interpolated_DMO_20180628060000_20180628120000_Temperature.npy")
+#      advdata_default = advdata[:,1,1,2,:,:]
+#      verif_metric = 'RMSE'
+
+#      # 1) Main producers for all different forecast lengths
+#      for verif_metric in verif_metrics_used:
+#         verif_metric_index = int((verif_metrics_used==verif_metric).nonzero()[0])
+#         df=pd.DataFrame({'AMV_CVdefault_2hours': advdata_default[0,:,verif_metric_index], 'AMV_CVdefault_3hours': advdata_default[1,:,verif_metric_index], 'AMV_CVdefault_4hours': advdata_default[2,:,verif_metric_index], 'AMV_CVdefault_5hours': advdata_default[3,:,verif_metric_index], 'AMV_CVdefault_6hours': advdata_default[4,:,verif_metric_index], 'linearCD_2hours': lindata[0,:,verif_metric_index], 'linearCD_3hours': lindata[1,:,verif_metric_index], 'linearCD_4hours': lindata[2,:,verif_metric_index], 'linearCD_5hours': lindata[3,:,verif_metric_index], 'linearCD_6hours': lindata[4,:,verif_metric_index], 'DMO': dmodata[:,verif_metric_index], 'persistence': perdata[:,verif_metric_index] })
+# #        num_plots=df.shape[1]
+       
+
+
+#         # from matplotlib import cm
+#         # cmap = cm.get_cmap('coolwarm_r')
+#         # fig, ax = plt.subplots()
+#         # plt.hold(True)
+#         # df.iloc[:,0:4].plot(linewidth=2,cmap=cm.get_cmap('coolwarm_r'))
+#         # # fig, ax = plt.subplots()
+#         # ax.plot(df.iloc[:,3:10].plot(linewidth=2,cmap=cm.get_cmap('coolwarm_r'))
+#         # # pp2 = df.iloc[:,3:10].plot(linewidth=2,cmap=cm.get_cmap('coolwarm_r'))
+#         # pp = pd.concat([pp1, pp2], axis=1)
+#         # plt.show()
+
+#         # A plot without any refinement of colours etc.
+#         from matplotlib import cm
+#         df.plot()
+        
+#         # 1) Plot with all the main producers (plots presented as a function of predictability and hour) WHAT IS WRONG HERE!!!!???? ALL THE SCALES GET TOTALLY WRONG!!!!!
+#         from matplotlib import cm
+#         fig, ax = plt.subplots()
+#         plt.hold(True)
+#         df.iloc[:,[0,1,2,3,4]].plot(ax=ax,stacked=True,linewidth=2,colormap='GnBu')
+#         # fig, ax = plt.subplots()
+#         ax.plot(df.iloc[:,5],color='r',marker='o') #,label=list(df)[5])
+#         df.iloc[:,[6,7,8,9,10]].plot(ax=ax,stacked=True,linewidth=2,colormap='YlOrRd')
+#         ax.plot(df.iloc[:,11],color='b',marker='o') #,label=list(df)[5])
+#         plt.show()
+#         ax.legend(loc='best')
+        
+#         # 2) plots showing the sensitivity analysis to various AMV parameters
+       
+
+
+
+
+
+
+#     advdata_default=verif_interpolated_advection[:,1,1,2,:,:]
+#     # Creating a pandas dataframe where the plotted data is being stored to
+#     df=pd.DataFrame({'advdata_default_2': advdata_default[0,:,1], 'advdata_default_3': advdata_default[1,:,1], 'advdata_default_4': advdata_default[2,:,1], 'advdata_default_5': advdata_default[3,:,1], 'advdata_default_5': advdata_default[4,:,1] })
+
+#     plt.plot(df)
+#     plt.legend()
 
 
 def read_HDF5(image_h5_file):
@@ -214,11 +290,16 @@ def main():
         image_array1, quantity1_min, quantity1_max, timestamp1, mask_nodata1 = read_HDF5("/fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613120000.hdf")
         # image_array2, quantity2_min, quantity2_max, timestamp2, mask_nodata2 = read_HDF5("/fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613121500.hdf")
     else:
-        image_array1, quantity1_min, quantity1_max, timestamp1, mask_nodata1, nodata1 = read_nc("/fmi/data/nowcasting/testdata/obsdata_pressure.nc")
-        quantity1 = "options.parameter"
+        image_array1, quantity1_min, quantity1_max, timestamp1, mask_nodata1, nodata1 = read_nc(options.obsdata)
+        quantity1 = options.parameter
     # The second field is always a model forecast field
-    image_array2, quantity2_min, quantity2_max, timestamp2, mask_nodata2, nodata2 = read_nc("/fmi/data/nowcasting/testdata/modeldata_pressure.nc")
-    quantity2 = "options.parameter"
+    image_array2, quantity2_min, quantity2_max, timestamp2, mask_nodata2, nodata2 = read_nc(options.modeldata)
+    quantity2 = options.parameter
+
+    # In verification mode timestamps must be the same, otherwise exiting!
+    if sum(timestamp1 == timestamp2)!=timestamp1.shape[0]:
+       raise ValueError("obs and model data have different timestamps!")
+       # sys.exit( "Timestamps do not match!" )    
 
     # Missing_values of image_array2 ("nodata2") are changed to "nodata1". The larger data is made smaller so that the actual data points in the two data sets have the same geographical domain (LAPS data covers a slighlty larger domain than pal).
     if np.ma.count_masked(mask_nodata2) > np.ma.count_masked(mask_nodata1):
@@ -229,7 +310,8 @@ def main():
         image_array1[np.where( np.ma.getmask(mask_nodata1) )] = nodata1
         image_array2[np.where( np.ma.getmask(mask_nodata1) )] = nodata1
         mask_nodata2 = mask_nodata1
-    nodata = nodata1 = nodata2
+    # Missing data values are the same for the two fields, and it is taken from the first field.
+    nodata = nodata2 = nodata1
     
     # Defining definite min/max values from the two fields
     R_min=min(quantity1_min,quantity2_min)
@@ -237,6 +319,11 @@ def main():
     # Defining a masked array that is the same for all the forecast fields and both producers (if even one forecast length is missing for a specific grid point, that grid point is masked out).
     mask_nodata = np.sum(np.ma.getmask(mask_nodata1),axis=0)>0
     mask_nodata = np.ma.masked_where(mask_nodata == True,mask_nodata)
+    
+    # Making another arbitrary mask for verification purposes (avoiding possible boundary problems)
+    mask_nodata_middle=np.ones(mask_nodata.shape,dtype=bool)
+    mask_nodata_middle[100:300,100:400]=False
+    mask_nodata_middle = np.ma.masked_where(mask_nodata_middle == True,mask_nodata_middle)
 
     # # Mask nodata values to be just slightly less than the lowest field value
     # image_array1[np.where(np.ma.getmask(mask_nodata1))] = R_min
@@ -274,7 +361,6 @@ def main():
     verif_interpolated_persistence = (np.ones(tuple([image_array1.shape[0],verif_metrics_used.shape[0]]))) 
     
 
-    sys.exit( "A Good Reason" )
 
     # CALCULATING INTERPOLATED IMAGES FOR DIFFERENT PRODUCERS AND CALCULATING VERIF METRICS
     for predictability in predictabilitys:
@@ -288,60 +374,115 @@ def main():
                 interpolated_advection=interpolate.advection(obsfields=image_array1, modelfields=image_array2, mask_nodata=mask_nodata, farneback_params=fb_params, predictability=predictability, seconds_between_steps=options.seconds_between_steps, R_min=R_min, R_max=R_max, missingval=nodata, logtrans=False)
                 fields_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,:,:] = interpolated_advection
                 # verif metrics calculated from interpolated data DONE BY HAND HERE!!!!
-                verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,0] = verif_calculation.ME(image_array1,interpolated_advection,mask_nodata)
-                verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,1] = verif_calculation.RMSE(image_array1,interpolated_advection,mask_nodata)
+                verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,0] = verif_calculation.ME(image_array1,interpolated_advection,mask_nodata_middle)
+                verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,1] = verif_calculation.RMSE(image_array1,interpolated_advection,mask_nodata_middle)
                 print(predictability,fb_winsize,fb_levels,fb_poly_n)
        # Calculating blend through simple linear cross-dissolve
        # Interpolated data
        interpolated_linear=interpolate.linear(obsfields=image_array1, modelfields=image_array2, mask_nodata=mask_nodata, predictability=predictability, seconds_between_steps=options.seconds_between_steps, missingval=nodata)
        fields_interpolated_linear[((predictabilitys==predictability).nonzero()),:,:,:] = interpolated_linear
        # verif metrics calculated from interpolated data DONE BY HAND HERE!!!!
-       verif_interpolated_linear[((predictabilitys==predictability).nonzero()),:,0] = verif_calculation.ME(image_array1,interpolated_linear,mask_nodata)
-       verif_interpolated_linear[((predictabilitys==predictability).nonzero()),:,1] = verif_calculation.RMSE(image_array1,interpolated_linear,mask_nodata)
+       verif_interpolated_linear[((predictabilitys==predictability).nonzero()),:,0] = verif_calculation.ME(image_array1,interpolated_linear,mask_nodata_middle)
+       verif_interpolated_linear[((predictabilitys==predictability).nonzero()),:,1] = verif_calculation.RMSE(image_array1,interpolated_linear,mask_nodata_middle)
     # Calculate verification metrics for DMO forecasts
-    verif_interpolated_DMO[:,0] = verif_calculation.ME(image_array1,image_array2,mask_nodata)
-    verif_interpolated_DMO[:,1] = verif_calculation.RMSE(image_array1,image_array2,mask_nodata)
+    verif_interpolated_DMO[:,0] = verif_calculation.ME(image_array1,image_array2,mask_nodata_middle)
+    verif_interpolated_DMO[:,1] = verif_calculation.RMSE(image_array1,image_array2,mask_nodata_middle)
     # Calculate verification metrics for persistence forecast
-    verif_interpolated_persistence[:,0] = verif_calculation.ME(np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),image_array2,mask_nodata)
-    verif_interpolated_persistence[:,1] = verif_calculation.RMSE(np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),image_array2,mask_nodata)
+    verif_interpolated_persistence[:,0] = verif_calculation.ME(image_array1,np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),mask_nodata_middle)
+    verif_interpolated_persistence[:,1] = verif_calculation.RMSE(image_array1,np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),mask_nodata_middle)
     
 
     # laske_eri_verif_metriikat voisi laskea metriikan myos liikevektorikenttien perusteella? Ensin kuitenkin perus-RMSE:n kaltaiset laskentaan...taman jalkeen muuta. Jos tekee, pitaa muokata interpolate.py -skriptia palauttamaan liikevektorikentat, jotta voi laskea myos analyysikenttien ja blendikenttien valille liikevektorit.
+                
+
+    # # For error hunting, calculate and plot a data frame which shows the mean values of the fields for various time steps
+    # advdata_default = np.mean(fields_interpolated_advection[:,1,1,2,:,100:300,100:400],axis=(2,3))
+    # lindata = np.mean(fields_interpolated_linear[:,:,100:300,100:400],axis=(2,3))
+    # dmodata = np.mean(image_array2[:,100:300,100:400],axis=(1,2))
+    # perdata = np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1))
+    # perdata = np.mean(perdata[:,100:300,100:400],axis=(1,2))
+
+    # advdata_default = (fields_interpolated_advection[:,1,1,2,:,200,200])
+    # lindata = (fields_interpolated_linear[:,:,200,200])
+    # dmodata = (image_array2[:,200,200])
+    # perdata = np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1))
+    # perdata = (perdata[:,200,200])
+    # verif_metric = 'RMSE'
+    # df=pd.DataFrame({'AMV_CVdefault_2hours': advdata_default[0,:], 'AMV_CVdefault_3hours': advdata_default[1,:], 'AMV_CVdefault_4hours': advdata_default[2,:], 'AMV_CVdefault_5hours': advdata_default[3,:], 'AMV_CVdefault_6hours': advdata_default[4,:], 'linearCD_2hours': lindata[0,:], 'linearCD_3hours': lindata[1,:], 'linearCD_4hours': lindata[2,:], 'linearCD_5hours': lindata[3,:], 'linearCD_6hours': lindata[4,:], 'DMO': dmodata, 'persistence': perdata })
+    # df.plot()
+    # df.iloc[:,[4,10,5]].plot()
+
+
+    
+    # # This is only for a quick visual inspection of the plots
+    # # TEMPERATURE
+    # # contour plots with 3-hour predictability and with severl forecast lengths
+    # plt.subplot(2,2,1)
+    # plt.imshow(fields_interpolated_advection[1,1,1,2,0,:,:],vmin=270,vmax=310,cmap='hot')
+    # plt.subplot(2,2,2)
+    # plt.imshow(fields_interpolated_advection[1,1,1,2,1,:,:],vmin=270,vmax=310,cmap='hot')
+    # plt.subplot(2,2,3)
+    # plt.imshow(fields_interpolated_advection[1,1,1,2,2,:,:],vmin=270,vmax=310,cmap='hot')
+    # plt.subplot(2,2,4)
+    # plt.imshow(fields_interpolated_advection[1,1,1,2,3,:,:],vmin=270,vmax=310,cmap='hot')
+    # plt.show()
+    
+    # # mean RMSE of all AMV calculated methods for various predictabilities and forecast lengths
+    # print(np.mean(verif_interpolated_advection[:,:,:,:,:,1],axis=(1,2,3)))
+    # # mean RMSE of AMV method using default set-up parameters for various predictabilities and forecast lengths
+    # print(verif_interpolated_advection[:,1,1,2,:,1])
+    # # mean RMSE of linear cross-dissolve method for various predictabilities and forecast lengths
+    # print(verif_interpolated_linear[:,:,1])
+    # # mean RMSE of DMO for various forecast lengths
+    # print(verif_interpolated_DMO[:,1])
+    # # mean RMSE of persistence for various forecast lengths
+    # print(verif_interpolated_persistence[:,1])
+
+
+    # # PRESSURE
+    # plt.subplot(2,2,1)
+    # plt.imshow(fields_interpolated_advection[4,1,0,0,0,:,:],vmin=100500,vmax=101900,cmap='hot')
+    # plt.subplot(2,2,2)
+    # plt.imshow(fields_interpolated_advection[4,1,0,0,1,:,:],vmin=100500,vmax=101900,cmap='hot')
+    # plt.subplot(2,2,3)
+    # plt.imshow(fields_interpolated_advection[4,1,0,0,2,:,:],vmin=100500,vmax=101900,cmap='hot')
+    # plt.subplot(2,2,4)
+    # plt.imshow(fields_interpolated_advection[4,1,0,0,3,:,:],vmin=100500,vmax=101900,cmap='hot')
+    # plt.show()
+
+    # # Saving of the verif results to files. Also display of a "classic line plot"
+    # line_verif_plot(verif_interpolated_advection,verif_interpolated_linear,verif_interpolated_dmo,verif_interpolated_persistence,optionsparameter,verif_metrics_used)
+
+    # Saving the verif stats to a file, scp'ing them to devmos.fmi.fi and removing the local result files
+    remotehost="ylhaisi@devmos.fmi.fi"
+    remotedir="/data/statcal/results/nowcasting/verif_stats/"
+    outdir="/fmi/data/nowcasting/results/verif_stats/"
+
+    outfile = "verif_interpolated_advection_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+    np.save(outdir + outfile,verif_interpolated_advection)
+    os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('rm "%s"' % (outdir + outfile) )
+    outfile = "verif_interpolated_linear_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+    np.save(outdir + outfile,verif_interpolated_linear)
+    os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('rm "%s"' % (outdir + outfile) )
+    outfile = "verif_interpolated_DMO_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+    np.save(outdir + outfile,verif_interpolated_DMO)
+    os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('rm "%s"' % (outdir + outfile) )
+    outfile = "verif_interpolated_persistence_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+    np.save(outdir + outfile,verif_interpolated_persistence)
+    os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('rm "%s"' % (outdir + outfile) )
+    
     
 
-    # This is only for a quick visual inspection of the plots
-    # TEMPERATURE
-    plt.subplot(2,2,1)
-    plt.imshow(fields_interpolated[0,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
-    plt.subplot(2,2,2)
-    plt.imshow(fields_interpolated[1,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
-    plt.subplot(2,2,3)
-    plt.imshow(fields_interpolated[3,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
-    plt.subplot(2,2,4)
-    plt.imshow(fields_interpolated[4,1,0,0,1,:,:],vmin=270,vmax=310,cmap='hot')
-    plt.show()
-    # PRESSURE
-    plt.subplot(2,2,1)
-    plt.imshow(fields_interpolated[4,1,0,0,0,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.subplot(2,2,2)
-    plt.imshow(fields_interpolated[4,1,0,0,1,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.subplot(2,2,3)
-    plt.imshow(fields_interpolated[4,1,0,0,2,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.subplot(2,2,4)
-    plt.imshow(fields_interpolated[4,1,0,0,3,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.show()
+    # ssh ylhaisi@devmos.fmi.fi "touch /data/statcal/results/nowcasting/testi.bar"
 
-    plt.subplot(2,2,1)
-    plt.imshow(interpolated_linear[1,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.subplot(2,2,2)
-    plt.imshow(interpolated_linear[2,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.subplot(2,2,3)
-    plt.imshow(interpolated_linear[3,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.subplot(2,2,4)
-    plt.imshow(interpolated_linear[4,:,:],vmin=100500,vmax=101900,cmap='hot')
-    plt.show()
-    # raise ScriptExit( "A Good Reason" )
-    # return;
+
+
+
+
 
     # #Calculate number of interpolated frames from timestamps and minutes between steps
     # formatted_time_first=datetime.datetime.strptime(timestamp1,'%Y%m%d%H%M%S')

@@ -12,29 +12,43 @@
 # SOLVED LAPS_skandinavia -fields are a bit smaller compared to pal_skandinavia -fields because of boundary handling. Probably pal-data needs to be made a bit smaller according to LAPS-boundaries so that the boundaries are not causing any problems in the AMV calculation or the interpolation itself
 # SOLVED learn how to read in netcdf files to Pytho
 # SOLVED for the function interpolation.advection, variables quantity_min/quantity_max need to be defined specificly for each variable. Simply take these from the fields (omitting the nodata value of course)
-
-# NECESSARY in function read_nc no kind of error checking of the data is being done atm. The min/max values are taken from the raw data as provided.
-# NECESSARY nodata fields can (in principle) be different between the timesteps. This causes problems in the beginning of interpolate_and_verify.py
-# NECESSARY No instantaneous precipitation in pal_skandinavia dataset? So just take the radar dBz images and scale them according to the 1hour accumulations in pal_skandinavia?
-# NECESSARY Farneback parameters: For what are these used? If for optical flow algorithm, what is the sensitivity of the forecasts to them (winsize in particular)?
-## What verification metrics would need to be calculated from the sensitivity experiments?
-## For practically any verif metrics (like field deformation or similar), previous merged forecasts need to be compared against current analysis. For development this is much much easier if analysis+forecasts are selected to be in the past so that verifying analyses are always available. Verification metrics can be calculated for both motion vectors calculated either forward and backward in time.
+# SOLVED Farneback parameters: For what are these used? If for optical flow algorithm, what is the sensitivity of the forecasts to them (winsize in particular)?
+# SOLVED Basic verification metrics for several producers
+## For practically any verif metrics, verif mode needs to be applied for development purposes. Verification metrics can be calculated for both motion vectors calculated either forward and backward in time.
 ### Model forecasts and persistence (skill scores compared to DMO). For temperature also linear cross-dissolve type of approach is needed
 ### Through using several Farneback parameters (winsize etc)
 ### As a function of forecast length
-## Verification of blended forecasts against PRODUCE THE CLASSIC RMSE-PLOT WHERE THREE (FOUR) CURVES ARE BEING PRODUCED AS A FUNCTION OF TIME (PERSISTENCE, MODEL FCST AND BLENDED FCST. For temperature, also linear cross-dissolve!). Here, blended forecast curves should be produced with several winsizes.
 
-
-# NECESSARY Visualization of the results? Through Turso-page and R scripts?
-# NECESSARY FOR OPERATIVE VERSION No error checking or triggering for the LAPS analysis of current hour whether it is available from Smartmet Server or not
-# NECESSARY SHOULD TULISET2 OR LAPS BE USED FOR PRECIPITATION? IF TULISET2, WHAT ABOUT INTERAPPLICABILITY OR SCALING OF THE RR UNITS?
-# NECESSARY You need to come up with reasonable R_min / R_max values for also other variables to precipitation. A named list for each parameter?
-
-# RADAR DATA CONVERSION TO EPSG 4326 IS MAYBE MORE PREFERABLE? Data coming from Smartmet Server is not yet reprojected to EPSG 3067 (or whatever projection is defined in $CONFPATH$CONFFILE$PROJ)
+# NECESSARY In order to wait for LAPS data, "sleep 1800" is not really a good solution. A better one needs to be done, using triggers which mark the arrival of LAPS.
+# NECESSARY No error checking for the input datas, especially LAPS_skandinavia. It needs to be checked whether all data is available from Smartmet Server or not.
+# NECESSARY in function read_nc no kind of error checking of the data is being done atm. The min/max values are taken from the raw data fields as provided. A named list for each parameter? Should here be some error checking based on plausible min/max values? missingvalue -checking already exist in the function read_nc.
+# NECESSARY nodata fields can (in principle) be different between the timesteps. This causes problems in the beginning of interpolate_and_verify.py
+# NECESSARY No instantaneous precipitation in pal_skandinavia dataset? Only Precipitation1h. So just take the radar dBz images and scale them according to the 1hour accumulations in pal_skandinavia? How should precipitation be handled, needs some discussion...(scale instantaneous precip values from radar images? morph between Tuliset2 and model or just the radar observation and model?
+# NECESSARY More advanced verification metrics based on field deformation etc.?
+# NECESSARY Visualization platform of the results (blended fields AND the related verif metrics)? Through Turso-page and R scripts?
+# NECESSARY Data seems to be upsidedown when plotted with plt.imshow()! Why?
+# NECESSARY Produce two classic RMSE-plots
+## 1) Four curves for different producers (Persistence, DMO fcst, AMV blended fcst with default parameters and linear cross-dissolve fcst) as a function of time and predictability.
+## 2) Sensitivity analysis of AMV blended forecasts. RMSE values of default parameters and varied parameters.
+# NECESSARY call_interpolation_testi.py currently works only in verif-mode.
+# NECESSARY CONVERSION OF THE DATA TO A COMMON PROJECTION...RADAR DATA CONVERSION TO EPSG 4326 IS MAYBE MORE PREFERABLE? Data coming from Smartmet Server is not yet reprojected to EPSG 3067 (or whatever projection is defined in $CONFPATH$CONFFILE$PROJ)
 # NOT ATM is there any need to have predictability defined in time-span where model data is not available? If this was done, model data would also need to be interpolated from 0 and 3 hour forecasts...Also, in the script call_interpolation.py the variable "n_interp_frames" would need to be accordingly defined as an even number.
 # NEXT STEP For precipitation, radar data RATE composites and model data instantaneous RATES would be needed. These would need to have a somewhat comparable temporal resolution.
-# QUESTION why filtering R1_f and R2_f in interpolation.py?
+# QUESTION why AMV calculation in interpolation.py (R1_f and R2_f) needs to have ubyte data types?
 #
+
+
+
+
+################## MAIN ##################
+
+# This script runs on hourly cron 1 minute over past, but the LAPS data is not available until about 20 past. So wait for 30 minutes for the LAPS data.
+sleep 1800
+
+
+
+
+
 ####### Input parameters ########
 # (remember to call shell scripts with named arguments like DATAPATH="/fmi/somepath/" ./run.sh though it is not necessary as there are always default values specified!) 
 
@@ -122,8 +136,8 @@ eval $query
 
 
 
-#for parameters in Pressure, GeopHeight, Temperature, DewPoint, Humidity, Visibility, PressureAtStationLevel, WindSpeedMS, WindDirection, WindVectorMS, HourlyMaximumGust, WindUMS, WindVMS, SurfaceWaterPhase #these parameters are available for the producer laps_skandinavia
-for PARAMETER in Pressure Temperature
+#for parameters in Pressure, GeopHeight, Temperature, DewPoint, Humidity, WindSpeedMS, WindDirection, WindVectorMS, HourlyMaximumGust, WindUMS, WindVMS #these parameters are available both for laps_skandinavia and pal_skandinavia
+for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS WindDirection WindVectorMS HourlyMaximumGust WindUMS WindVMS
 do
 
 OBSDATA="$STARTTIME"_endtime"$ENDTIME"_"$USED_OBS"_DOMAIN="$DOMAIN"_"$PARAMETER".nc
@@ -186,14 +200,14 @@ eval $query
 # END
 
 # Updated call with additional parameters
-cmd=$PYTHON" call_interpolation_testi.py --obsdata "$DATAPATH"obsdata.nc --modeldata "$DATAPATH"modeldata.nc --seconds_between_steps "$SECONDS_BETWEEN_STEPS" --output_interpolate "$OUTPATH$OUTFILE_INTERP" --predictability "$PREDICTABILITY" --parameter "$PARAMETER --mode $MODE
+cmd=$PYTHON" call_interpolation_testi.py --obsdata "$DATAPATH"obsdata.nc --modeldata "$DATAPATH"modeldata.nc --seconds_between_steps "$SECONDS_BETWEEN_STEPS" --output_interpolate "$OUTPATH$OUTFILE_INTERP" --predictability "$PREDICTABILITY" --parameter "$PARAMETER" --mode "$MODE
 
 # Similar call and parameters as for generate.sh in /fmi/dev/run/radar/amv/spoflow/interpolate/precipfields USE THIS!!
 #cmd="$PYTHON call_interpolation.py --first_precip_field $DATAPATH/$OBSDATA_reprojected.nc --second_precip_field $DATAPATH/$MODELDATA_reprojected.nc --seconds_between_steps $SECONDS_BETWEEN_STEPS --output_interpolate $OUTPATH/$OUTFILE_INTERP --output_sum $OUTPATH/$OUTFILE_SUM --mode $MODE"
 # THIS WORKS!
 # cmd="$PYTHON call_interpolation_testi.py --first_precip_field /fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613120000.hdf --second_precip_field /fmi/data/nowcasting/testdata_radar/opera_rate/T_PAAH21_C_EUOC_20180613121500.hdf --seconds_between_steps 30 --output_interpolate $OUTPATH/$OUTFILE_INTERP --output_sum $OUTPATH/$OUTFILE_SUM"
 echo $cmd
-#eval $cmd
+eval $cmd
 
 ##  Convert output to png?
 # OUTFILES=`echo $OUTFILE | awk -F{} '{print $2}'`
