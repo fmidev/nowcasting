@@ -2,7 +2,8 @@ import netCDF4
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-import pyresample
+from pyresample import geometry
+from pyproj import Proj
 
 
 def read_nc(image_nc_file):
@@ -26,17 +27,46 @@ def read_nc(image_nc_file):
     return temps, lats, lons, temps_min, temps_max, dtime, mask_nodata, nodata
 
 
+def resample_projection(lats, lons):
 
-def map_coord(lats, lons):
+    #Grid definition information of existing data
+    grid_def = geometry.GridDefinition(lons=lons, lats=lats)
 
-    #LAPS
+    #Wanted projection
+    area_id = 'laps_scan'
+    description = 'LAPS Scandinavian domain'
+    proj_id = 'laps_scan'
     proj='stere'
+    proj='epsg:3995'
+    lon_0=20.0
+    lat_0=90.0
 
-    #Scandinavia domain
+    #x_size = 1000
+    #y_size = 1000
+
+    #Corner points to be converted to wanted projection
     lon1=-2.448425
     lat1=68.79139
     lon2=29.38635
     lat2=54.67893
+
+    #Calculate coordinate points in projection
+    p = Proj(init=proj)
+    x1, y1 = p(lon1,lat1)
+    x2, y2 = p(lon2,lat2)
+
+    print x1,y1, x2,y2
+
+    print abs(x1-x2)/abs(y1-y2)
+    print abs(y1-y2)/abs(x1-x2)
+
+
+
+    area_extent = (x1,y1,x2,y2)
+    proj_dict = {'a': '6371228.0', 'units': 'm', 'lon_0': lon_0, 'proj': proj, 'lat_0': lat_0}
+    area_def = geometry.AreaDefinition(area_id, description, proj_id, proj_dict, x_size, y_size, area_extent)
+
+    print area_def
 
     #Finland domain
     #lon1=16.52893
@@ -44,41 +74,14 @@ def map_coord(lats, lons):
     #lon2=31.85138
     #lat2=58.76623
 
-    lon_0=20.0
-    lat_0=90.0
-    
-    # create projection
-    m = Basemap(llcrnrlon=lon1, llcrnrlat=lat1, urcrnrlon=lon2, urcrnrlat=lat2,\
-            rsphere=6371000.,\
-            resolution='l',projection=proj,\
-            lat_1=lat_0,lat_2=lat_0,lat_0=lat_0,lon_0=lon_0)
-
-    # Transform coordinates to figure coordinates
-    x,y = m(lons,lats)
-    
-    return m, x, y
-
-
+        
+    #return m, x, y
 
 
 def plot_imshow(temps,vmin,vmax):
 
     plt.imshow(temps[0,:,:],vmin=vmin,vmax=vmax)
     plt.show()
-
-
-
-def plot_map_proj(m,x,y,temps):
-
-    m.drawcoastlines()
-    m.drawparallels(np.arange(-80.,81.,20.))
-    m.drawmeridians(np.arange(-180.,181.,20.))
-    m.contour(x,y,temps)
-
-    plt.title("North Polar Stereographic Projection")
-    plt.show()
-
-
 
 
 def main():
@@ -90,12 +93,11 @@ def main():
 
     #Gridded lat and lon
     lons, lats=np.meshgrid(lons, lats)
-
     plot_imshow(temps,temps_min,temps_max)
 
-    #Projection coordinates
-    m, x, y=map_coord(lats, lons)
-    plot_map_proj(m,x,y,temps)
+    resample_projection(lats, lons)
+
+    
 
 
 
