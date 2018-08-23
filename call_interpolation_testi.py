@@ -281,8 +281,6 @@ def main():
     # #Read parameters from config file for interpolation (or optical flow algorithm, find out this later!). The function for reading the parameters is defined above.
     farneback_params=farneback_params_config()
 
-    # FIRST LEARN HOW TO READ NETCDF OBS AND MODEL FIELDS IN. The function below is written only for reading HDF5 radar data. Also radar observations need to be in some kind of accumulation form as pal_skandinavia data are always 1h accumulations.
-
     # In the "verification mode", the idea is to load in the "observational" and "forecast" datasets as numpy arrays. Both of these numpy arrays ("image_array") contain ALL the timesteps contained also in the files themselves. In addition, the returned variables "timestamp" and "mask_nodata" contain the values for all the timesteps.
 
     # First precipitation field is from Tuliset2/analysis. What about possible scaling???
@@ -457,31 +455,34 @@ def main():
     remotehost="ylhaisi@devmos.fmi.fi"
     remotedir="/data/statcal/results/nowcasting/verif_stats/"
     outdir="/fmi/data/nowcasting/results/verif_stats/"
+    outdir_elmo="/fmi/$FMI_RUN_ENV/products/cache/nowcasting"
 
-    outfile = "verif_interpolated_advection_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+    outfile = "advection/verif_interpolated_advection_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
     np.save(outdir + outfile,verif_interpolated_advection)
     os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('cp "%s" "%s"' % (outdir + outfile, outdir_elmo) )
     os.system('rm "%s"' % (outdir + outfile) )
-    outfile = "verif_interpolated_linear_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+
+    outfile = "linear/verif_interpolated_linear_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
     np.save(outdir + outfile,verif_interpolated_linear)
     os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('cp "%s" "%s"' % (outdir + outfile, outdir_elmo) )
     os.system('rm "%s"' % (outdir + outfile) )
-    outfile = "verif_interpolated_DMO_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+
+    outfile = "DMO/verif_interpolated_DMO_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
     np.save(outdir + outfile,verif_interpolated_DMO)
     os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('cp "%s" "%s"' % (outdir + outfile, outdir_elmo) )
     os.system('rm "%s"' % (outdir + outfile) )
-    outfile = "verif_interpolated_persistence_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
+
+    outfile = "persistence/verif_interpolated_persistence_" + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_" + options.parameter + ".npy"
     np.save(outdir + outfile,verif_interpolated_persistence)
     os.system('scp "%s" "%s:%s"' % (outdir + outfile, remotehost, remotedir + outfile) )
+    os.system('cp "%s" "%s"' % (outdir + outfile, outdir_elmo) )
     os.system('rm "%s"' % (outdir + outfile) )
-    
     
 
     # ssh ylhaisi@devmos.fmi.fi "touch /data/statcal/results/nowcasting/testi.bar"
-
-
-
-
 
 
     # #Calculate number of interpolated frames from timestamps and minutes between steps
@@ -566,10 +567,10 @@ if __name__ == '__main__':
     #Parse commandline arguments
     parser = argparse.ArgumentParser()
     parser.add_argument('--obsdata',
-                        default="/fmi/data/nowcasting/obsdata.nc",
+                        default="/fmi/data/nowcasting/testdata/obsdata.nc",
                         help='Obs data, representing the first time step used in image morphing.')
     parser.add_argument('--modeldata',
-                        default="/fmi/data/nowcasting/modeldata.nc",
+                        default="/fmi/data/nowcasting/testdata/modeldata.nc",
                         help='Model data, representing the last time step used in image morphing.')
     parser.add_argument('--seconds_between_steps',
                         type=int,
