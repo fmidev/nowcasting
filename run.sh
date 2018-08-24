@@ -112,13 +112,16 @@ COMPOSITE=$COMPOSITE_DIR/$COMPOSITE_BASENAME
 # DATE=$YEAR$MONTH$DAY' '$HOUR:$MIN
 
 
-####### Defining actual boundary area
+####### Defining actual boundary area and used projection
 # Read in conf file
 query="source "$CONFDIR$DOMAIN".cnf"
 echo $query
 eval $query
-# echo $BBOX
-# echo $PROJ
+# HERE MANUALLY OVERRIDING THE BOUNDING BOX WHICH IS ORIGINALLY SPECIFIED IN CONF FILE
+BBOX="-2.448425,54.67893,29.38635,68.79139"
+PROJ="3995"
+echo $BBOX
+echo $PROJ
 # echo $SIZE
 
 
@@ -144,29 +147,29 @@ for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS W
     #wget -O out2.nc --no-proxy 'smartmet.fmi.fi/download?param=Temperature&producer=ecmwf_eurooppa_pinta&format=netcdf&bbox=19.1,59.7,31.7,70.1&timesteps=24&projection=epsg:4326'
 
     # Retrieving pal forecast over Scandinavian domain
-    query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:4326'"
-    # echo $query
+    query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:"$PROJ"'"
+    echo $query
     eval $query
     # Change to netcdf4 type file OR DO THE REPROJECTION HERE AND READ IN NETCDF3 FILES IN PYTHON SCRIPT
     query="nccopy -k 4 "$DATAPATH$MODELDATA" "$DATAPATH"modeldata.nc"
     # echo $query
     eval $query
     # Retrieve grid information from edited data (modeldata.nc file) and use this to retrieve a grid of same size for laps_skandinavia
-    query='ncdump -h '$DATAPATH'modeldata.nc | grep "lat ="'
+    query='ncdump -h '$DATAPATH'modeldata.nc | grep "y ="'
     # echo $query
     SIZE_LAT=$(eval $query)
-    SIZE_LAT=`echo ${SIZE_LAT:7} | rev`
+    SIZE_LAT=`echo ${SIZE_LAT:5} | rev`
     SIZE_LAT=`echo ${SIZE_LAT:2} | rev`
-    query='ncdump -h '$DATAPATH'modeldata.nc | grep "lon ="'
+    query='ncdump -h '$DATAPATH'modeldata.nc | grep "x ="'
     # echo $query
     SIZE_LON=$(eval $query)
-    SIZE_LON=`echo ${SIZE_LON:7} | rev`
+    SIZE_LON=`echo ${SIZE_LON:5} | rev`
     SIZE_LON=`echo ${SIZE_LON:2} | rev`
     #echo $SIZE_LAT
     #echo $SIZE_LON
 
     # Retrieving LAPS data over Scandinavian domain
-    query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:4326'"
+    query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:"$PROJ"'"
     echo $query
     eval $query
     # IF NO LAPS AVAILABLE IN OPERATIVE MODE THEN WHAT?! ADD ERROR CHECKING HERE!

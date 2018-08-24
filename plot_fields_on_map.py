@@ -2,7 +2,7 @@ import netCDF4
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
-from pyresample import geometry
+from pyresample import geometry, image
 from pyproj import Proj
 
 
@@ -27,17 +27,20 @@ def read_nc(image_nc_file):
     return temps, lats, lons, temps_min, temps_max, dtime, mask_nodata, nodata
 
 
-def resample_projection(lats, lons):
+def resample_data(lats, lons, data):
 
     #Grid definition information of existing data
     grid_def = geometry.GridDefinition(lons=lons, lats=lats)
 
+    
+
+
+
     #Wanted projection
     area_id = 'laps_scan'
     description = 'LAPS Scandinavian domain'
-    proj_id = 'laps_scan'
-    proj='stere'
-    proj='epsg:3995'
+    proj_id = 'stere'
+    proj = 'epsg:3995'
     lon_0=20.0
     lat_0=90.0
 
@@ -60,10 +63,11 @@ def resample_projection(lats, lons):
     print abs(x1-x2)/abs(y1-y2)
     print abs(y1-y2)/abs(x1-x2)
 
-
+    x_size=1000
+    y_size=abs(x1-x2)/abs(y1-y2)*1000
 
     area_extent = (x1,y1,x2,y2)
-    proj_dict = {'a': '6371228.0', 'units': 'm', 'lon_0': lon_0, 'proj': proj, 'lat_0': lat_0}
+    proj_dict = {'a': '6371228.0', 'units': 'm', 'lon_0': lon_0, 'proj': proj_id, 'lat_0': lat_0}
     area_def = geometry.AreaDefinition(area_id, description, proj_id, proj_dict, x_size, y_size, area_extent)
 
     print area_def
@@ -73,6 +77,21 @@ def resample_projection(lats, lons):
     #lat1=70.34990
     #lon2=31.85138
     #lat2=58.76623
+
+
+    #Resampling data
+    laps_con_quick = image.ImageContainerQuick(data, grid_def)
+    area_con_quick = laps_con_quick.resample(area_def)
+    result_data_quick = area_con_quick.image_data
+    laps_con_nn = image.ImageContainerNearest(data, grid_def, radius_of_influence=50000)
+    area_con_nn = laps_con_nn.resample(area_def)
+    result_data_nn = area_con_nn.image_data
+
+    print result_data_nn
+
+
+
+
 
         
     #return m, x, y
@@ -92,10 +111,10 @@ def main():
     temps, lats, lons, temps_min, temps_max, dtime, mask_nodata, nodata=read_nc(options.input_file)
 
     #Gridded lat and lon
-    lons, lats=np.meshgrid(lons, lats)
+    #lons, lats=np.meshgrid(lons, lats)
     plot_imshow(temps,temps_min,temps_max)
 
-    resample_projection(lats, lons)
+#    resample_data(lats, lons, temps)
 
     
 
