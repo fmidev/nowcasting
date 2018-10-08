@@ -1,3 +1,9 @@
+# -*- coding: utf-8 -*-
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import cm
+
 import interpolate
 import h5py
 import hiisi
@@ -5,12 +11,13 @@ import numpy as np
 import argparse
 import datetime
 import ConfigParser
-import matplotlib.pyplot as plt
 import netCDF4
 import sys
 import verif_calculation
 import pandas as pd
 import os
+from scipy.misc import imresize
+from scipy.ndimage.filters import gaussian_filter
 
 def read_nc(image_nc_file):
     tempds = netCDF4.Dataset(image_nc_file)
@@ -105,6 +112,36 @@ def read_nc(image_nc_file):
 
 #     plt.plot(df)
 #     plt.legend()
+
+def plot_imshow(temps,vmin,vmax,outfile,cmap):
+    plt.imshow(temps,cmap=cmap,vmin=vmin,vmax=vmax,origin="lower")
+    plt.axis('off')
+    plt.tight_layout(pad=0.)
+    plt.xticks([])
+    plt.yticks([])
+    plt.savefig(outfile,bbox_inches='tight', pad_inches=0)
+    plt.close()
+
+
+def plot_only_colorbar(vmin,vmax,units,outfile,cmap):
+    fig = plt.figure(figsize=(8, 1))
+    ax1 = fig.add_axes([0.05, 0.80, 0.9, 0.15])
+    norm = matplotlib.colors.Normalize(vmin=vmin, vmax=vmax)
+    cb1 = matplotlib.colorbar.ColorbarBase(ax1,cmap=cmap, norm=norm,orientation='horizontal')
+    cb1.set_label(units)
+    plt.savefig(outfile,bbox_inches='tight')
+    plt.close()
+
+
+def plot_verif_scores(fc_lengths,verif_scores,labels,outfile,title,y_ax_title):
+    for n in range(0, verif_scores.shape[0]):
+        plt.plot(fc_lengths, verif_scores[n,:], linewidth=2.0, label=str(labels[n]))
+    plt.legend(bbox_to_anchor=(0.21, 1))
+    plt.title(title)
+    plt.xlabel('Forecast length (h)')
+    plt.ylabel(y_ax_title)
+    plt.savefig(outfile,bbox_inches='tight', pad_inches=0)
+    plt.close()
 
 
 def read_HDF5(image_h5_file):
@@ -299,7 +336,7 @@ def main():
        raise ValueError("obs and model data have different timestamps!")
        # sys.exit( "Timestamps do not match!" )    
 
-    # Missing_values of image_array2 ("nodata2") are changed to "nodata1". The larger data is made smaller so that the actual data points in the two data sets have the same geographical domain (LAPS data covers a slighlty larger domain than pal).
+    # Missing_values of image_array2 ("nodata2") are changed to "nodata1".
     if np.ma.count_masked(mask_nodata2) > np.ma.count_masked(mask_nodata1):
         image_array1[np.where( np.ma.getmask(mask_nodata2) )] = nodata1
         image_array2[np.where( np.ma.getmask(mask_nodata2) )] = nodata1
@@ -320,7 +357,9 @@ def main():
     
     # Making another arbitrary mask for verification purposes (avoiding possible boundary problems)
     mask_nodata_middle=np.ones(mask_nodata.shape,dtype=bool)
-    mask_nodata_middle[100:300,100:400]=False
+    #(Not needed with both areas being the same)
+    #mask_nodata_middle[100:300,100:400]=False
+    mask_nodata_middle=False
     mask_nodata_middle = np.ma.masked_where(mask_nodata_middle == True,mask_nodata_middle)
 
     # # Mask nodata values to be just slightly less than the lowest field value
@@ -329,11 +368,15 @@ def main():
 
     # DATA IS NOW LOADED AS NORMAL NUMPY NDARRAYS
 
-
-
-
-
-
+    #Resize observation field to same resolution with model field and slightly blur 
+    #to make the two fields look more similar for OpenCV.
+    image_array1_reshaped=np.zeros(image_array2.shape)
+    for n in range(0,image_array1.shape[0]):
+        #Resize                       
+        image_array1_reshaped[n]=imresize(image_array1[n], image_array2[0].shape, interp='bilinear', mode='F')
+        #Blur
+        image_array1_reshaped[n]=gaussian_filter(image_array1_reshaped[n], 0.5)
+    image_array1=image_array1_reshaped
 
     # RANGE OF POSSIBLE VALUES FOR SENSITIVITY TESTS
     # With this setup the sensitivity analysis is done by running AMV calculation with 200 different set-ups. The result array of ones is about 2218 MBs, so it still should be easily manageable.
@@ -357,14 +400,12 @@ def main():
     verif_interpolated_DMO = (np.ones(tuple([image_array1.shape[0],verif_metrics_used.shape[0]]))) 
     # Verification array for the persistence forecast
     verif_interpolated_persistence = (np.ones(tuple([image_array1.shape[0],verif_metrics_used.shape[0]]))) 
-    
-
-
+ 
     # CALCULATING INTERPOLATED IMAGES FOR DIFFERENT PRODUCERS AND CALCULATING VERIF METRICS
     for predictability in predictabilitys:
-       for fb_winsize in fb_winsizes:
-          for fb_levels in fb_levelss:
-             for fb_poly_n in fb_poly_ns:
+       for fb_winsize in fb_winsizes:     #Farneback default value: 30
+          for fb_levels in fb_levelss:    #Farneback default value: 6     
+             for fb_poly_n in fb_poly_ns:    #Farneback default value: 7
                 # Like mentioned at https://docs.opencv.org/2.4/modules/video/doc/motion_analysis_and_object_tracking.html, a reasonable value for poly_sigma depends on poly_n. Here we use a fraction 4.6 for these values.
                 fb_poly_sigma = fb_poly_n / 4.6
                 fb_params = (farneback_params[0],fb_levels,fb_winsize,farneback_params[3],fb_poly_n,fb_poly_sigma,farneback_params[6])
@@ -374,7 +415,35 @@ def main():
                 # verif metrics calculated from interpolated data DONE BY HAND HERE!!!!
                 verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,0] = verif_calculation.ME(image_array1,interpolated_advection,mask_nodata_middle)
                 verif_interpolated_advection[((predictabilitys==predictability).nonzero()),((fb_winsizes==fb_winsize).nonzero()),((fb_levelss==fb_levels).nonzero()),((fb_poly_ns==fb_poly_n).nonzero()),:,1] = verif_calculation.RMSE(image_array1,interpolated_advection,mask_nodata_middle)
-                print(predictability,fb_winsize,fb_levels,fb_poly_n)
+                
+                #Save fields to files for predictability 4 hours and Farneback default values
+                #After looking at verification scores changed fb_poly_n from 7 to 20, seems to be better for us!!!
+                if predictability == 4 and fb_winsize == 30 and fb_levels == 6 and fb_poly_n == 20:
+                    outdir_elmo = "/fmi/dev/products/cache/nowcasting/"
+                    outfile = timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_interp_adv_" + options.parameter + "_pred=4_fback=default.npy"
+                    np.save(outdir_elmo + outfile,interpolated_advection)
+                    
+                    #Minimum and maximum for plotting
+                    vmin=min(quantity1_min,quantity2_min)
+                    vmax=max(quantity1_max,quantity2_max)
+                   
+                    #Read color settings for current parameter from config file 
+                    config_file_colors="color_settings.cfg"
+                    config_colors = ConfigParser.RawConfigParser()
+                    config_colors.read(config_file_colors)
+                    units = config_colors.get(options.parameter, "units")
+                    cmap = config_colors.get(options.parameter, "cmap")
+                    
+                    #Plot colorbar                                                                                                   
+                    outfile=outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime(\
+"%Y%m%d%H%M%S") + "_" + options.parameter + "_colorbar.png"
+                    plot_only_colorbar(vmin,vmax,units,outfile,cmap)
+
+                    #Plot fields
+                    for n in range(0,interpolated_advection.shape[0]):
+                        outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_interp_adv_" + options.parameter + "_fc=+" + str(n)  + "h.png"
+                        plot_imshow(interpolated_advection[n],vmin,vmax,outfile,cmap)
+
        # Calculating blend through simple linear cross-dissolve
        # Interpolated data
        interpolated_linear=interpolate.linear(obsfields=image_array1, modelfields=image_array2, mask_nodata=mask_nodata, predictability=predictability, seconds_between_steps=options.seconds_between_steps, missingval=nodata)
@@ -389,6 +458,55 @@ def main():
     verif_interpolated_persistence[:,0] = verif_calculation.ME(image_array1,np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),mask_nodata_middle)
     verif_interpolated_persistence[:,1] = verif_calculation.RMSE(image_array1,np.tile(image_array1[0,:,:],(image_array1.shape[0],1,1)),mask_nodata_middle)
     
+
+    #Plot verification scores for advection parameters (one parameter varies and rest have default values)
+    #After looking at verification scores changed fb_poly_n from 7 to 20, seems to be better for us!!!
+    fc_lengths=np.arange(0,6+1)
+    y_ax_title=options.parameter + " (" + units + ")"
+    #RMSE
+    #Varying predictability  
+    title = "RMSE, Varying predictability"
+    verif_scores= verif_interpolated_advection[:,1,1,3,:,1]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_rmse_adv_predictability_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,predictabilitys,outfile,title,y_ax_title)
+    #Varying Fb winsize
+    title = "RMSE, Varying Farneback winsize"
+    verif_scores= verif_interpolated_advection[3,:,1,3,:,1]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_rmse_adv_fbwinsize_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,fb_winsizes,outfile,title,y_ax_title)
+    #Varying Fb winsize 
+    title = "RMSE, Varying Farneback levels"
+    verif_scores= verif_interpolated_advection[3,1,:,3,:,1]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_rmse_adv_fblevel_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,fb_levelss,outfile,title,y_ax_title)
+    #Varying Fb poly ns
+    title = "RMSE, Varying Farneback Poly ns"
+    verif_scores= verif_interpolated_advection[3,1,1,:,:,1]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_rmse_adv_fbpolyns_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,fb_poly_ns,outfile,title,y_ax_title)
+    #ME
+    #Varying predictability
+    title = "ME, Varying predictability"
+    verif_scores= verif_interpolated_advection[:,1,1,3,:,0]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_me_adv_predictability_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,predictabilitys,outfile,title,y_ax_title)
+    #Varying Fb winsize                                                                                               
+    title = "ME, Varying Farneback winsize"
+    verif_scores= verif_interpolated_advection[3,:,1,3,:,0]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_me_adv_fbwinsize_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,fb_winsizes,outfile,title,y_ax_title)
+    #Varying Fb winsize 
+    title = "ME, Varying Farneback levels"
+    verif_scores= verif_interpolated_advection[3,1,:,3,:,0]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_me_adv_fblevel_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,fb_levelss,outfile,title,y_ax_title)
+    #Varying Fb poly ns         
+    title = "ME, Varying Farneback Poly ns"
+    verif_scores= verif_interpolated_advection[3,1,1,:,:,0]
+    outfile = outdir_elmo + timestamp1[0].strftime("%Y%m%d%H%M%S") + "_" + timestamp1[timestamp1.shape[0]-1].strftime("%Y%m%d%H%M%S") + "_me_adv_fbpolyns_" + options.parameter + ".png"
+    plot_verif_scores(fc_lengths,verif_scores,fb_poly_ns,outfile,title,y_ax_title)
+
+
 
     # laske_eri_verif_metriikat voisi laskea metriikan myos liikevektorikenttien perusteella? Ensin kuitenkin perus-RMSE:n kaltaiset laskentaan...taman jalkeen muuta. Jos tekee, pitaa muokata interpolate.py -skriptia palauttamaan liikevektorikentat, jotta voi laskea myos analyysikenttien ja blendikenttien valille liikevektorit.
                 
@@ -481,7 +599,6 @@ def main():
     os.system('cp "%s" "%s"' % (outdir + outfile, outdir_elmo) )
     os.system('rm "%s"' % (outdir + outfile) )
     
-
     # ssh ylhaisi@devmos.fmi.fi "touch /data/statcal/results/nowcasting/testi.bar"
 
 

@@ -118,7 +118,7 @@ query="source "$CONFDIR$DOMAIN".cnf"
 echo $query
 eval $query
 # HERE MANUALLY OVERRIDING THE BOUNDING BOX WHICH IS ORIGINALLY SPECIFIED IN CONF FILE
-BBOX="-2.448425,54.67893,29.38635,68.79139"
+BBOX="5,55,40,71"
 PROJ="3995"
 echo $BBOX
 echo $PROJ
@@ -133,8 +133,8 @@ echo $PROJ
 #OUTFILE=${OUTFILE:-"201608151230_spoflow.proesmans_ravake.h5"}
 
 
-#for parameters in Pressure, GeopHeight, Temperature, DewPoint, Humidity, WindSpeedMS, WindDirection, WindVectorMS, HourlyMaximumGust, WindUMS, WindVMS #these parameters are available both for laps_skandinavia and pal_skandinavia. WindVectorMS parametria ei ole konffattu Smartmet Serverille.
-for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS WindDirection HourlyMaximumGust WindUMS WindVMS; do
+#for parameters in Pressure, GeopHeight, Temperature, DewPoint, Humidity, WindSpeedMS, WindDirection, WindVectorMS, HourlyMaximumGust, WindUMS, WindVMS #these parameters are available both for laps_skandinavia and pal_skandinavia. Parameters WindVectorMS and HourlyMaximumGust are not configured to Smartmet Server for producer LAPS_Skandinavia (270818).
+for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS WindDirection WindUMS WindVMS; do
 
     OBSDATA="$STARTTIME"_endtime"$ENDTIME"_"$USED_OBS"_DOMAIN="$DOMAIN"_"$PARAMETER".nc
     MODELDATA="$STARTTIME"_fcst"$ENDTIME"_"$USED_MODEL"_DOMAIN="$DOMAIN"_"$PARAMETER".nc
@@ -147,7 +147,7 @@ for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS W
     #wget -O out2.nc --no-proxy 'smartmet.fmi.fi/download?param=Temperature&producer=ecmwf_eurooppa_pinta&format=netcdf&bbox=19.1,59.7,31.7,70.1&timesteps=24&projection=epsg:4326'
 
     # Retrieving pal forecast over Scandinavian domain
-    query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:"$PROJ"'"
+    query="wget -O "$DATAPATH$MODELDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_MODEL"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&projection=stereographic&centrallongitude=20,centrallatitude=90,truelatitude=60&bbox="$BBOX"'"
     echo $query
     eval $query
     # Change to netcdf4 type file OR DO THE REPROJECTION HERE AND READ IN NETCDF3 FILES IN PYTHON SCRIPT
@@ -169,7 +169,8 @@ for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS W
     #echo $SIZE_LON
 
     # Retrieving LAPS data over Scandinavian domain
-    query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:"$PROJ"'"
+    query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&projection=stereographic&centrallongitude=20,centrallatitude=90,truelatitude=60&bbox="$BBOX"'"
+    # query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:"$PROJ"&gridcenter=20,90'"
     echo $query
     eval $query
     # IF NO LAPS AVAILABLE IN OPERATIVE MODE THEN WHAT?! ADD ERROR CHECKING HERE!
@@ -236,5 +237,18 @@ for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS W
     #eval $query
  
 done
+
+
+#Write starttime and endtime to file CONF.js for use in html page jquery
+pushd /fmi/$FMI_RUN_ENV/run/nowcasting
+rm -f CONF.js
+
+cat <<EOF>>CONF.js
+STARTTIME = "${STARTTIME}00"
+ENDTIME = "${ENDTIME}00"
+EOF
+
+popd
+
 
 exit

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+    <title>Nowcast-blendin verifiointisivu</title>
+
+    <meta charset="utf8">
+    <meta http-equiv="refresh" content="3600" >
+
+    <script src="jquery-3.2.1.js"></script>
+    <script type="text/javascript" src="jaydee/jaydee-base.js" ></script>
+    <script type="text/javascript" src="jaydee/jaydee-file.js" ></script>
+    <script type="text/javascript" src="jaydee/jaydee-variable.js" ></script>
+    <script type="text/javascript" src="jaydee/jaydee-animator.js" ></script>
+
+    <script src="CONF.js"></script>
+    <script src="verif_nowcast.js"></script>
+
+    <link rel="stylesheet" href="verif_nowcast.css" type="text/css" />
+  </head>
+
+  <body>
+
+    <h1> Nowcast-blendin verifiointisivu </h1>
+
+    <h3> Verifiointiparametreja eri suureilla ajetulle nowcast-blendille. </h3>
+
+    Tällä sivulla tarkastellaan muuttuvien laskentaparametrien vaikutusta advektiomenetelmällä (OpenCV) lasketun nowcast-blendin laatuun. Yhtä laskentaparametria kerrallaan on varioitu ja muut parametrit ovat pysyneet oletusarvoissaan.
+    <br>
+    <br>
+    Oletusarvot parametreille ovat:
+    <br>
+    Ennustettavuus: 4
+    <br>
+    Farneback winsize: 30
+    <br>
+    Farneback levels: 6
+    <br>
+    Farneback Poly ns: 7
+    <br>
+    <br>
+
+    <label for="sel1">Ennustesuure:</label>
+    <select id="sel1" onchange="javascript:selectParameters();"></select>
+
+    <label for="sel2">Tilastollinen tunnusluku:</label>
+    <select id="sel2" onchange="javascript:selectParameters();"></select>
+
+    <label for="sel3">Vaihteleva parametri:</label>
+    <select id="sel3" onchange="javascript:selectParameters();"></select>
+
+    <h3 id="label"></h3>
+
+    <figure>
+      <figcaption></figcaption>
+      <img id="fig" src="" width="700">
+    </figure>
+	  
+  </body>
+
+</html>

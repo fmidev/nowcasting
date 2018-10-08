@@ -6,13 +6,20 @@ PYTHON=${PYTHON:-'/fmi/dev/python_virtualenvs/venv/bin/python'}
 #Variables
 DATAPATH=${DATAPATH:-"$PWD"}
 OUTPATH=${OUTPATH:-"$PWD"}
-#INPUT_FILE="201808170400_endtime201808171000_laps_skandinavia_DOMAIN=SCAND2_Temperature.nc"
-INPUT_FILE="201808240000_endtime201808240600_laps_skandinavia_DOMAIN=SCAND2_Temperature.nc"
+USED_OBS=${USED_OBS:-"laps"}
+USED_MODEL=${USED_MODEL:-"pal"}
+DOMAIN=${DOMAIN:-"SCAND2"}
 
-OUTPUT_FILE="test.png"
-
-#Run plotting
+INPUT_FILE="201808240700_endtime201808241300_laps_skandinavia_DOMAIN=SCAND2_Temperature.nc"
+OUTPUT_FILE="laps"
 echo $DATAPATH/$INPUT_FILE
 cmd="$PYTHON plot_fields_on_map.py --input_file $DATAPATH/$INPUT_FILE --output_file $OUTPATH/$OUTPUT_FILE"
 echo $cmd
 eval $cmd
+
+#INPUT_FILE="201808240700_fcst201808241300_pal_skandinavia_DOMAIN=SCAND2_Temperature.nc"
+#OUTPUT_FILE="pal"
+#echo $DATAPATH/$INPUT_FILE
+#cmd="$PYTHON plot_fields_on_map.py --input_file $DATAPATH/$INPUT_FILE --output_file $OUTPATH/$OUTPUT_FILE"
+#echo $cmd
+#eval $cmd

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+  <head>
+
+    <title>Nowcast-blending</title>
+
+    <meta charset="utf8">
+    <meta http-equiv="refresh" content="3600" >
+
+    <script src="jquery-3.2.1.js"></script>
+    <script type="text/javascript" src="jaydee/jaydee-base.js" ></script>
+    <script type="text/javascript" src="jaydee/jaydee-file.js" ></script>
+    <script type="text/javascript" src="jaydee/jaydee-variable.js" ></script>
+    <script type="text/javascript" src="jaydee/jaydee-animator.js" ></script>
+
+    <script src="CONF.js"></script>
+    <script src="nowcasting.js"></script>
+
+    <link rel="stylesheet" href="nowcasting.css" type="text/css" />
+  </head>
+
+  <body>
+
+    <h1> Nowcasting-projekti, blendaus havaintojen ja mallin välillä </h1>
+
+    <h3> LAPS-analyysin ja editoidun kentän yhdistelmä 4 h ennustettavuudella. </h3>
+
+    Ennustepituus 0 on suoraan LAPS-analyysistä ja ennustepituudet 4,5,6 taas ovat viimeisimmästä tietokannassa olevasta meteorologin ennusteesta. Tällä voitaisiin helpottaa/parantaa lyhyttä editointia, mikäli menetelmä toimii hyvin.
+
+    <br>
+    <br>
+
+    <label for="sel1">Ennustesuure:</label>
+    <select id="sel1" onchange="javascript:selectParameters();"></select>
+
+    <label for="sel2">Ennusteen pituus (h):</label>
+    <select id="sel2" onchange="javascript:selectParameters();"></select>
+
+
+
+    <table><tr><td>
+	</td><td valign="top">
+	  <table border="0" align="center">
+	    <tr>
+	      <td></td>
+	      <td></td>
+	    </tr>
+	    <tr>
+	      <td>
+		<table border="0">
+		  <tr><td align="center"><font color="#6666CC"> <h2 id="label"></h2></font></td></tr>
+		  <tr><td>
+		      <svg width="700" height="700" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+			<g>
+			  <image id="data" xlink:href="map_transparent.png" height="700px" width="700px" />
+			  <image id="map" xlink:href="map_transparent.png" height="700px" width="700px" />
+			</g>
+		      </svg>
+		  </td></tr>
+		  <tr><td>
+		      <figure>                                                                                                            
+			<figcaption></figcaption>
+			<img id="colorbar" src="" width="700">
+		      </figure>          
+		  </table>
+
+	  </table>
+	</td><td> 
+	  <table id="animtimer" style="border-collapse:collapse; padding:0px; margin:0px">
+	    <tr><td><a> <span id="link_name_0" onMouseOver="anim_image(0)" onMouseOut="mouseOff(0)"></span> </a></td></tr>
+	    <tr><td><a> <span id="link_name_1" onMouseOver="anim_image(1)" onMouseOut="mouseOff(1)"></span> </a></td></tr>
+	    <tr><td><a> <span id="link_name_2" onMouseOver="anim_image(2)" onMouseOut="mouseOff(2)"></span> </a></td></tr>
+	    <tr><td><a> <span id="link_name_3" onMouseOver="anim_image(3)" onMouseOut="mouseOff(3)"></span> </a></td></tr>
+	    <tr><td><a> <span id="link_name_4" onMouseOver="anim_image(4)" onMouseOut="mouseOff(4)"></span> </a></td></tr>
+	    <tr><td><a> <span id="link_name_5" onMouseOver="anim_image(5)" onMouseOut="mouseOff(5)"></span> </a></td></tr>
+	    <tr><td><a> <span id="link_name_6" onMouseOver="anim_image(6)" onMouseOut="mouseOff(6)"></span> </a></td></tr>
+	    <tr><td><a> <input type="button" value="play" onclick="anim[this.value]()" title="TEST" /> </a></td></tr>
+	    <tr><td><a> <input type="button" value="pause" onclick="anim[this.value]()" /> </a></td></tr>
+	  </table>
+    </table>   
+
+  </body>
+
+</html>
