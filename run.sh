@@ -169,14 +169,15 @@ for PARAMETER in Pressure GeopHeight Temperature DewPoint Humidity WindSpeedMS W
     #echo $SIZE_LON
 
     # Retrieving LAPS data over Scandinavian domain
-    query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&projection=stereographic&centrallongitude=20,centrallatitude=90,truelatitude=60&bbox="$BBOX"'"
+    query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&projection=stereographic&centrallongitude=20,centrallatitude=90,truelatitude=60&bbox="$BBOX"&gridsize="$SIZE_LON","$SIZE_LAT"'"
+    # query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&projection=stereographic&centrallongitude=20,centrallatitude=90,truelatitude=60&bbox="$BBOX"'"
     # query="wget -O "$DATAPATH$OBSDATA" --no-proxy 'http://smartmet.fmi.fi/download?param="$PARAMETER"&producer="$USED_OBS"&format=netcdf&gridsize="$SIZE_LON","$SIZE_LAT"&starttime="$STARTTIME"&endtime="$ENDTIME"&timestep="$MINUTES_BETWEEN_STEPS"&bbox="$BBOX"&projection=epsg:"$PROJ"&gridcenter=20,90'"
     echo $query
     eval $query
     # IF NO LAPS AVAILABLE IN OPERATIVE MODE THEN WHAT?! ADD ERROR CHECKING HERE!
     # Change to netcdf4 type file OR DO THE REPROJECTION HERE AND READ IN NETCDF3 FILES IN PYTHON SCRIPT
     query="nccopy -k 4 "$DATAPATH$OBSDATA" "$DATAPATH"obsdata.nc"
-    #echo $query
+    echo $query
     eval $query
 
 
